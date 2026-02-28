@@ -1,0 +1,173 @@
+import { redirect, notFound } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import Link from 'next/link';
+import Image from 'next/image';
+import { Nav } from '@/components/nav';
+import { calcPriceWithMargin20, calcPriceWithMargin30, calcFee, calcGrossProfit } from '@/lib/calculations';
+import { SaleForm } from './sale-form';
+import { RestockForm } from './restock-form';
+
+export default async function ProductDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  const { data: product } = await supabase
+    .from('products')
+    .select('*')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .single();
+  if (!product) notFound();
+
+  const { data: sales } = await supabase
+    .from('sales')
+    .select('*')
+    .eq('product_id', id)
+    .order('sold_at', { ascending: false })
+    .limit(50);
+
+  const { data: feeRates } = await supabase
+    .from('fee_rates')
+    .select('*')
+    .or(`platform.eq.mercari,platform.eq.rakuma`);
+
+  const { data: shippingRates } = await supabase
+    .from('shipping_rates')
+    .select('*')
+    .or(`platform.eq.mercari,platform.eq.rakuma`);
+
+  const { data: settings } = await supabase
+    .from('app_settings')
+    .select('*')
+    .eq('user_id', user.id);
+
+  const price20 = calcPriceWithMargin20(product.cost_yen);
+  const price30 = calcPriceWithMargin30(product.cost_yen);
+  const fee20 = calcFee(price20, 10, 'floor');
+  const gross20 = price20 - fee20 - product.cost_yen;
+  const fee30 = calcFee(price30, 10, 'floor');
+  const gross30 = price30 - fee30 - product.cost_yen;
+
+  const defaultMercariFee = feeRates?.find((f) => f.platform === 'mercari' && f.rate_percent === 10);
+  const defaultRakumaFees = feeRates?.filter((f) => f.platform === 'rakuma') || [];
+
+  return (
+    <div className="min-h-screen">
+      <Nav />
+      <main className="container mx-auto px-4 py-8 max-w-4xl">
+        <Link href={product.stock > 0 ? '/products' : '/products/sold-out'} className="text-emerald-600 hover:underline mb-4 inline-block">
+          ← 一覧に戻る
+        </Link>
+        <div className="rounded-lg border border-slate-200 bg-white p-6 mb-6">
+          <div className="flex gap-6">
+            <div className="flex-shrink-0">
+              {product.image_url ? (
+                <div className="relative h-32 w-32">
+                  <Image
+                    src={product.image_url}
+                    alt={product.name}
+                    fill
+                    className="object-cover rounded-lg"
+                  />
+                </div>
+              ) : (
+                <div className="h-32 w-32 bg-slate-200 rounded-lg flex items-center justify-center text-slate-400">
+                  画像なし
+                </div>
+              )}
+            </div>
+            <div className="flex-1">
+              <h1 className="text-xl font-bold">{product.name}</h1>
+              <p className="text-slate-600 mt-1">SKU: {product.sku || '-'}</p>
+              <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-slate-500">原価（税込）</span>
+                  <p className="font-semibold">¥{product.cost_yen.toLocaleString()}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500">在庫数</span>
+                  <p className="font-semibold">{product.stock}</p>
+                </div>
+                <div>
+                  <span className="text-slate-500">利益20%目安価格</span>
+                  <p className="font-semibold">¥{price20.toLocaleString()}（粗利¥{gross20.toLocaleString()}）</p>
+                </div>
+                <div>
+                  <span className="text-slate-500">利益30%目安価格</span>
+                  <p className="font-semibold">¥{price30.toLocaleString()}（粗利¥{gross30.toLocaleString()}）</p>
+                </div>
+              </div>
+              {product.memo && (
+                <p className="mt-4 text-slate-600 text-sm">メモ: {product.memo}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {product.stock > 0 && (
+          <div className="rounded-lg border border-slate-200 bg-white p-6 mb-6">
+            <h2 className="font-bold text-lg mb-4">販売登録</h2>
+            <SaleForm
+              productId={product.id}
+              currentStock={product.stock}
+              costYen={product.cost_yen}
+              feeRates={feeRates || []}
+              shippingRates={shippingRates || []}
+              settings={settings || []}
+            />
+          </div>
+        )}
+
+        {product.stock === 0 && (
+          <div className="rounded-lg border border-slate-200 bg-white p-6 mb-6">
+            <h2 className="font-bold text-lg mb-4">再入荷</h2>
+            <RestockForm productId={product.id} />
+          </div>
+        )}
+
+        <div className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="font-bold text-lg mb-4">販売履歴</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="py-2 text-left">販売日</th>
+                  <th className="py-2 text-right">個数</th>
+                  <th className="py-2 text-right">単価</th>
+                  <th className="py-2 text-right">手数料</th>
+                  <th className="py-2 text-right">送料</th>
+                  <th className="py-2 text-right">粗利</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(!sales || sales.length === 0) && (
+                  <tr>
+                    <td colSpan={6} className="py-4 text-center text-slate-500">
+                      販売履歴がありません
+                    </td>
+                  </tr>
+                )}
+                {sales?.map((s) => (
+                  <tr key={s.id} className="border-b border-slate-100">
+                    <td className="py-2">{s.sold_at}</td>
+                    <td className="py-2 text-right">{s.quantity}</td>
+                    <td className="py-2 text-right">¥{s.unit_price_yen.toLocaleString()}</td>
+                    <td className="py-2 text-right">¥{s.fee_yen.toLocaleString()}</td>
+                    <td className="py-2 text-right">¥{s.shipping_yen.toLocaleString()}</td>
+                    <td className="py-2 text-right">¥{s.gross_profit_yen.toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
