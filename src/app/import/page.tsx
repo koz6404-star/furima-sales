@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 import { Nav } from '@/components/nav';
 
 export default function ImportPage() {
@@ -10,6 +10,7 @@ export default function ImportPage() {
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [skipFirstRow, setSkipFirstRow] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingPhase, setLoadingPhase] = useState<'upload' | 'process' | null>(null);
   const [result, setResult] = useState<{
     created: number;
     updated: number;
@@ -17,19 +18,84 @@ export default function ImportPage() {
     imageCount?: number;
   } | null>(null);
   const router = useRouter();
+  const supabase = createClient();
 
   const handleImport = async () => {
     if (!excelFile) return;
     setLoading(true);
     setResult(null);
+    setLoadingPhase('upload');
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setResult({ created: 0, updated: 0, errors: ['ログインしてください'] });
+        setLoading(false);
+        return;
+      }
+
+      const uuid = crypto.randomUUID();
+      const excelPath = `${user.id}/import-temp/${uuid}.xlsx`;
+
+      const { error: excelErr } = await supabase.storage
+        .from('product-images')
+        .upload(excelPath, excelFile, { upsert: true });
+
+      if (excelErr) {
+        setResult({
+          created: 0,
+          updated: 0,
+          errors: ['Excelのアップロードに失敗しました: ' + excelErr.message],
+        });
+        setLoading(false);
+        return;
+      }
+
+      let zipPath: string | null = null;
+      if (zipFile) {
+        const zipUuid = crypto.randomUUID();
+        zipPath = `${user.id}/import-temp/${zipUuid}.zip`;
+        const { error: zipErr } = await supabase.storage
+          .from('product-images')
+          .upload(zipPath, zipFile, { upsert: true });
+        if (zipErr) {
+          setResult({
+            created: 0,
+            updated: 0,
+            errors: ['画像ZIPのアップロードに失敗しました: ' + zipErr.message],
+          });
+          setLoading(false);
+          return;
+        }
+      }
+
+      setLoadingPhase('process');
       const formData = new FormData();
-      formData.append('file', excelFile);
+      formData.append('excelPath', excelPath);
       formData.append('skipFirstRow', String(skipFirstRow));
-      if (zipFile) formData.append('zipFile', zipFile);
+      if (zipPath) formData.append('zipPath', zipPath);
 
       const res = await fetch('/api/import-excel', { method: 'POST', body: formData });
-      const data = await res.json();
+      const text = await res.text();
+      let data: { error?: string; created?: number; updated?: number; errors?: string[]; imageCount?: number };
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        const statusHint =
+          res.status === 413
+            ? 'ファイルが大きすぎます（上限約5MB）。画像を減らすか、ZIPで画像を分けてください。'
+            : res.status >= 500
+              ? 'サーバーエラーです。しばらく後に再試行してください。'
+              : '';
+        setResult({
+          created: 0,
+          updated: 0,
+          errors: [
+            `取込に失敗しました (${res.status}): ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`,
+            statusHint,
+          ].filter(Boolean),
+        });
+        return;
+      }
 
       if (!res.ok) {
         setResult({ created: 0, updated: 0, errors: [data.error || res.statusText] });
@@ -49,6 +115,7 @@ export default function ImportPage() {
       });
     } finally {
       setLoading(false);
+      setLoadingPhase(null);
       router.refresh();
     }
   };
@@ -63,6 +130,9 @@ export default function ImportPage() {
             <h2 className="font-semibold mb-2">1. Excelファイル（.xlsx）</h2>
             <p className="text-sm text-slate-600 mb-2">
               推奨列: 商品名, THE CKB SKU, 規格, 商品数, 1個あたりのコスト（円）など。CKB商品管理シート.xlsx は埋め込み画像・規格（サイズ/色）・商品数に自動対応します。
+            </p>
+            <p className="text-xs text-slate-500 mb-1">
+              ※ExcelはSupabaseに直接アップロードするため、大容量ファイル（埋め込み画像含む）も取り込めます。
             </p>
             <input
               type="file"
@@ -97,7 +167,11 @@ export default function ImportPage() {
             disabled={loading || !excelFile}
             className="rounded bg-emerald-600 px-4 py-2 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
           >
-            {loading ? '取込中...（数十秒かかる場合があります）' : '取り込み実行'}
+            {loading
+              ? loadingPhase === 'upload'
+                ? 'Excelをアップロード中...'
+                : '取り込み処理中...（数十秒かかることがあります）'
+              : '取り込み実行'}
           </button>
         </div>
         {result && (

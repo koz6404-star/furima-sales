@@ -24,12 +24,11 @@ async function runWithConcurrency<T>(
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const file = formData.get('file') as File;
-    const zipFile = formData.get('zipFile') as File | null;
+    const excelPath = formData.get('excelPath') as string | null;
+    const zipPath = formData.get('zipPath') as string | null;
     const skipFirstRow = formData.get('skipFirstRow') === 'true';
-    if (!file) {
-      return NextResponse.json({ error: 'ファイルが必要です' }, { status: 400 });
-    }
+
+    const file = formData.get('file') as File | null;
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -37,12 +36,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'ログインが必要です' }, { status: 401 });
     }
 
-    const ab = await file.arrayBuffer();
-    const buf = Buffer.from(ab);
+    let buf: Buffer;
+    let fileName = 'import.xlsx';
+
+    if (excelPath) {
+      if (!excelPath.startsWith(user.id + '/')) {
+        return NextResponse.json({ error: '不正なパスです' }, { status: 400 });
+      }
+      const { data, error } = await supabase.storage.from('product-images').download(excelPath);
+      if (error || !data) {
+        return NextResponse.json({ error: 'Excelの取得に失敗しました: ' + (error?.message ?? 'Unknown') }, { status: 400 });
+      }
+      buf = Buffer.from(await data.arrayBuffer());
+      fileName = excelPath.split('/').pop() ?? 'import.xlsx';
+    } else if (file) {
+      const ab = await file.arrayBuffer();
+      buf = Buffer.from(ab);
+      fileName = file.name;
+    } else {
+      return NextResponse.json({ error: 'Excelファイルが必要です' }, { status: 400 });
+    }
     const rows: Record<string, unknown>[] = [];
     const imageUrlsByIndex: Record<number, string> = {};
 
-    if (file.name.toLowerCase().endsWith('.xlsx')) {
+    if (fileName.toLowerCase().endsWith('.xlsx')) {
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buf as unknown as ArrayBuffer);
       const ws = wb.worksheets[0];
@@ -92,8 +109,16 @@ export async function POST(req: NextRequest) {
     }
 
     let imageMap = new Map<string, Buffer>();
-    if (zipFile) {
-      const zip = await JSZip.loadAsync(await zipFile.arrayBuffer());
+    if (zipPath) {
+      if (!zipPath.startsWith(user.id + '/')) {
+        return NextResponse.json({ error: '不正なZIPパスです' }, { status: 400 });
+      }
+      const { data: zipData, error: zipErr } = await supabase.storage.from('product-images').download(zipPath);
+      if (zipErr || !zipData) {
+        return NextResponse.json({ error: 'ZIPの取得に失敗しました: ' + (zipErr?.message ?? 'Unknown') }, { status: 400 });
+      }
+      const zipBuf = Buffer.from(await zipData.arrayBuffer());
+      const zip = await JSZip.loadAsync(zipBuf);
       const entries = Object.entries(zip.files).filter(([p, e]) => !e.dir && /\.(png|jpg|jpeg|gif|webp)$/i.test(p));
       let idx = 0;
       for (const [path, entry] of entries) {
@@ -251,11 +276,17 @@ export async function POST(req: NextRequest) {
     }
 
     const imageCount = Object.keys(imageUrlsByIndex).length;
+
+    if (excelPath) {
+      await supabase.storage.from('product-images').remove([excelPath]);
+      if (zipPath) await supabase.storage.from('product-images').remove([zipPath]);
+    }
+
     return NextResponse.json({
       created,
       updated,
       errors,
-      imageCount: file.name.toLowerCase().endsWith('.xlsx') ? imageCount : undefined,
+      imageCount: fileName.toLowerCase().endsWith('.xlsx') ? imageCount : undefined,
     });
   } catch (e) {
     console.error('Import API error:', e);
