@@ -10,7 +10,12 @@ export default function ImportPage() {
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [skipFirstRow, setSkipFirstRow] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ created: number; updated: number; errors: string[] } | null>(null);
+  const [result, setResult] = useState<{
+    created: number;
+    updated: number;
+    errors: string[];
+    imageCount?: number;
+  } | null>(null);
   const router = useRouter();
 
   const handleImport = async () => {
@@ -33,6 +38,7 @@ export default function ImportPage() {
           created: data.created ?? 0,
           updated: data.updated ?? 0,
           errors: data.errors ?? [],
+          imageCount: data.imageCount,
         });
       }
     } catch (e) {
@@ -96,7 +102,12 @@ export default function ImportPage() {
         </div>
         {result && (
           <div className="mt-6 rounded-lg border p-4 bg-slate-50">
-            <p className="font-medium">結果: 新規 {result.created}件, 更新 {result.updated}件</p>
+            <p className="font-medium">
+              結果: 新規 {result.created}件, 更新 {result.updated}件
+              {result.imageCount !== undefined && (
+                <span className="ml-2 text-slate-600">画像 {result.imageCount}件反映</span>
+              )}
+            </p>
             {result.errors.length > 0 && (
               <ul className="mt-2 text-sm text-red-600">
                 {result.errors.slice(0, 10).map((e, i) => (

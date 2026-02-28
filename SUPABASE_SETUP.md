@@ -42,6 +42,23 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS size TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS color TEXT;
 ```
 
+### Excel取込で画像を反映する場合（Storage ポリシー）
+
+Excelの埋め込み画像をアップロードするには、SQL Editor で以下を実行してください:
+
+```sql
+-- product-images バケットへのアップロードを許可
+INSERT INTO storage.buckets (id, name, public) VALUES ('product-images', 'product-images', true) ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Allow authenticated uploads" ON storage.objects;
+CREATE POLICY "Allow authenticated uploads" ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'product-images' AND (storage.foldername(name))[1] = auth.uid()::text);
+
+DROP POLICY IF EXISTS "Allow public read" ON storage.objects;
+CREATE POLICY "Allow public read" ON storage.objects FOR SELECT TO public
+USING (bucket_id = 'product-images');
+```
+
 ### セット出品機能を使う場合（product_set_items テーブル）
 
 一括選択からの「セット出品」を使うには、SQL Editor で以下を実行してください:

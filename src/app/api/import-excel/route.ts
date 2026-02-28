@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
 
     if (file.name.toLowerCase().endsWith('.xlsx')) {
       const wb = new ExcelJS.Workbook();
-      await wb.xlsx.load(ab);
+      await wb.xlsx.load(buf as unknown as ArrayBuffer);
       const ws = wb.worksheets[0];
       const xlsxWb = XLSX.read(buf, { type: 'buffer' });
       const xlsxWs = xlsxWb.Sheets[xlsxWb.SheetNames[0]];
@@ -61,7 +61,9 @@ export async function POST(req: NextRequest) {
         const excelRow = typeof tl.nativeRow === 'number' ? tl.nativeRow : (tl as { row?: number }).row ?? 0;
         const dataRowIdx = excelRow - 2;
         if (dataRowIdx < 0) continue;
-        const mediaItem = media.find((m: { index: number }) => Number(m.index) === Number(img.imageId));
+        const mediaItem =
+          media.find((m: { index: number }) => Number(m.index) === Number(img.imageId)) ??
+          media.find((m: { index: number }) => String(m.index) === String(img.imageId));
         if (mediaItem?.buffer) {
           const ext = mediaItem.extension === 'jpeg' ? 'jpg' : (mediaItem.extension || 'png');
           const buf = Buffer.isBuffer(mediaItem.buffer) ? mediaItem.buffer : Buffer.from(mediaItem.buffer as ArrayBuffer);
@@ -78,6 +80,8 @@ export async function POST(req: NextRequest) {
         if (!error) {
           const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(path);
           imageUrlsByIndex[dataRowIdx] = urlData.publicUrl;
+        } else {
+          console.error('[import-excel] 画像アップロード失敗:', dataRowIdx, error.message);
         }
       });
     } else {
@@ -246,7 +250,13 @@ export async function POST(req: NextRequest) {
       updated += results.filter((r) => !r.error).length;
     }
 
-    return NextResponse.json({ created, updated, errors });
+    const imageCount = Object.keys(imageUrlsByIndex).length;
+    return NextResponse.json({
+      created,
+      updated,
+      errors,
+      imageCount: file.name.toLowerCase().endsWith('.xlsx') ? imageCount : undefined,
+    });
   } catch (e) {
     console.error('Import API error:', e);
     return NextResponse.json(

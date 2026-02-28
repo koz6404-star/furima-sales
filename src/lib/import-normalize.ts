@@ -41,15 +41,12 @@ const findColumn = (row: ExcelRow, candidates: string[]) => {
 
 const parseKikaku = (val: string): { size?: string; color?: string } => {
   if (!val || typeof val !== 'string') return {};
-  const parts = val.split(/[；;]/);
   let size: string | undefined;
   let color: string | undefined;
-  for (const p of parts) {
-    const m = p.trim().match(/^(サイズ|規格|色)[:：]\s*(.+)$/);
-    if (m) {
-      if (m[1] === '色') color = m[2].trim();
-      else size = m[2].trim();
-    }
+  const regex = /(?:^|[\s,，；;])(サイズ|規格|色)[:：]\s*([^,，；;\s]+(?=[,，；;\s]|$))/g;
+  for (const m of val.matchAll(regex)) {
+    if (m[1] === '色') color = m[2].trim();
+    else size = m[2].trim();
   }
   return { size, color };
 };
@@ -84,9 +81,28 @@ export function normalizeRow(row: ExcelRow): NormalizedProduct {
   if (stockVal === undefined || stockVal === null || stockVal === '') {
     const stockKey = Object.keys(row).find((k) => {
       const nk = normalizeKey(k);
-      return nk.includes('商品数') || nk.includes('shouhinsuu') || nk === '品数';
+      const trimmed = k.trim().replace(/\uFEFF/g, '');
+      return (
+        nk.includes('商品数') ||
+        nk.includes('shouhinsuu') ||
+        nk === '品数' ||
+        trimmed === '商品数'
+      );
     });
     if (stockKey) stockVal = row[stockKey];
+  }
+  if (stockVal === undefined || stockVal === null || stockVal === '') {
+    const keys = Object.keys(row);
+    const fifthKey = keys[4];
+    if (
+      fifthKey &&
+      (normalizeKey(keys[3] ?? '').includes('規格') || normalizeKey(fifthKey).includes('商品'))
+    ) {
+      const v = row[fifthKey];
+      if (v !== undefined && v !== null && v !== '' && /^\d+$/.test(String(v).trim())) {
+        stockVal = v;
+      }
+    }
   }
   const kikakuVal = findColumn(row, ['規格', 'サイズ', 'size', '色', 'カラー', 'color']);
   const parsed = parseKikaku(String(kikakuVal ?? ''));
