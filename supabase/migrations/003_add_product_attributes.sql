@@ -1,0 +1,4 @@
+-- 商品に企画・サイズ・色を追加
+ALTER TABLE products ADD COLUMN IF NOT EXISTS campaign TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS size TEXT;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS color TEXT;

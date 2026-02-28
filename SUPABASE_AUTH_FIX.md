@@ -1,43 +1,55 @@
 # メール確認リンクが開けない場合の対処
 
-## 原因
+## 方法A: スクリプトで Site URL を自動設定（おすすめ）
 
-Supabase の「Site URL」と「Redirect URLs」が、実際のアプリURLと一致していないためです。
+ブラウザ操作は **トークン取得の1回だけ** です。
 
-## 対処手順
+### ステップ1: トークンを作成（1回だけ・ブラウザで）
 
-### 1. URL Configuration を開く
+1. 次のリンクを開く: https://supabase.com/dashboard/account/tokens
+2. 「Generate new token」をクリック
+3. 名前を入力（例: auth-config）→ 作成
+4. 表示されたトークンをコピー
 
-次のリンクをクリック:
+### ステップ2: .env.local に追加（PC内のファイル）
+
+以下の2行を .env.local に追加:
+
+```
+SUPABASE_ACCESS_TOKEN=コピーしたトークン
+APP_URL=https://furima-sales-4jpp2oc0d-koz6404-3041s-projects.vercel.app
+```
+
+※ APP_URL は Vercel のドメイン一覧で確認した実際のURLに置き換えてください。
+
+### ステップ3: スクリプトを実行
+
+```powershell
+cd "d:\カーサープロジェクト\フリマアプリ　売上管理アプリ作成"
+node scripts/set-supabase-auth-url.mjs
+```
+
+→ Site URL が自動で設定されます。
+
+### ステップ4: Redirect URLs を手動追加（1回だけ）
+
 https://supabase.com/dashboard/project/ewxzsftkxkqrvhjavrfd/auth/url-configuration
 
-### 2. 次のように設定する
-
-**Site URL** にアプリのURLを入力:
-```
-https://furima-sales-4jpp2oc0d-koz6404-3041s-projects.vercel.app
-```
-（あなたのVercelの実際のURLに置き換えてください）
-
-**Redirect URLs** に以下を追加（＋で追加）:
-```
-https://furima-sales-4jpp2oc0d-koz6404-3041s-projects.vercel.app/**
-https://furima-sales-4jpp2oc0d-koz6404-3041s-projects.vercel.app/auth/callback
-```
-
-### 3. 「Save」をクリック
+「Redirect URLs」に以下を追加:
+- `https://あなたのアプリURL/**`
+- `https://あなたのアプリURL/auth/callback`
 
 ---
 
-## アプリのURLの確認方法
+## 方法B: すべて手動で設定
 
-Vercel のプロジェクト → ドメイン一覧に表示されているURLを使用してください。
-例: `furima-sales-xxx.vercel.app` 形式
+https://supabase.com/dashboard/project/ewxzsftkxkqrvhjavrfd/auth/url-configuration
+
+Site URL と Redirect URLs を手動で入力して Save。
 
 ---
 
 ## 補足: メール確認を省略する（開発時のみ）
 
 Supabase > Authentication > Providers > Email で  
-**「Confirm email」** をオフにすると、確認メールなしで即ログインできます。  
-本番ではオンにすることを推奨します。
+**「Confirm email」** をオフにすると、確認メールなしで即ログインできます。

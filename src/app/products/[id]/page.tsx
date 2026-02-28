@@ -6,6 +6,7 @@ import { Nav } from '@/components/nav';
 import { calcPriceWithMargin20, calcPriceWithMargin30, calcFee, calcGrossProfit } from '@/lib/calculations';
 import { SaleForm } from './sale-form';
 import { RestockForm } from './restock-form';
+import { ProductDeleteButton } from '@/components/product-delete-button';
 
 export default async function ProductDetailPage({
   params,
@@ -47,6 +48,25 @@ export default async function ProductDetailPage({
     .select('*')
     .eq('user_id', user.id);
 
+  let setComponents: { component_product_id: string; quantity_per_set: number }[] = [];
+  let setComponentNames: { name: string; quantity_per_set: number }[] = [];
+  const { data: setItems } = await supabase
+    .from('product_set_items')
+    .select('component_product_id, quantity_per_set')
+    .eq('set_product_id', id);
+  if (setItems?.length) {
+    setComponents = setItems;
+    const compIds = setItems.map((i) => i.component_product_id);
+    const { data: comps } = await supabase
+      .from('products')
+      .select('id, name')
+      .in('id', compIds);
+    setComponentNames = setItems.map((i) => {
+      const c = comps?.find((p) => p.id === i.component_product_id);
+      return { name: c?.name || '(不明)', quantity_per_set: i.quantity_per_set };
+    });
+  }
+
   const price20 = calcPriceWithMargin20(product.cost_yen);
   const price30 = calcPriceWithMargin30(product.cost_yen);
   const fee20 = calcFee(price20, 10, 'floor');
@@ -83,8 +103,41 @@ export default async function ProductDetailPage({
               )}
             </div>
             <div className="flex-1">
-              <h1 className="text-xl font-bold">{product.name}</h1>
+              <div className="flex items-center gap-4 flex-wrap">
+                <h1 className="text-xl font-bold">{product.name}</h1>
+                <Link
+                  href={`/products/${product.id}/edit`}
+                  className="text-sm text-emerald-600 hover:underline"
+                >
+                  編集
+                </Link>
+                <ProductDeleteButton
+                  productId={product.id}
+                  productName={product.name}
+                  redirectTo={product.stock > 0 ? '/products' : '/products/sold-out'}
+                  variant="ghost"
+                />
+              </div>
               <p className="text-slate-600 mt-1">SKU: {product.sku || '-'}</p>
+              {(product.campaign || product.size || product.color) && (
+                <div className="mt-2 flex flex-wrap gap-3 text-sm">
+                  {product.campaign && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                      企画: {product.campaign}
+                    </span>
+                  )}
+                  {product.size && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-100 text-blue-800">
+                      サイズ: {product.size}
+                    </span>
+                  )}
+                  {product.color && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-100 text-amber-800">
+                      色: {product.color}
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-slate-500">原価（税込）</span>
@@ -103,6 +156,14 @@ export default async function ProductDetailPage({
                   <p className="font-semibold">¥{price30.toLocaleString()}（粗利¥{gross30.toLocaleString()}）</p>
                 </div>
               </div>
+              {setComponentNames.length > 0 && (
+                <div className="mt-3 text-sm">
+                  <span className="text-slate-500">セット構成: </span>
+                  <span className="text-slate-700">
+                    {setComponentNames.map((c) => `${c.name}×${c.quantity_per_set}`).join(' + ')}
+                  </span>
+                </div>
+              )}
               {product.memo && (
                 <p className="mt-4 text-slate-600 text-sm">メモ: {product.memo}</p>
               )}
@@ -127,7 +188,10 @@ export default async function ProductDetailPage({
         {product.stock === 0 && (
           <div className="rounded-lg border border-slate-200 bg-white p-6 mb-6">
             <h2 className="font-bold text-lg mb-4">再入荷</h2>
-            <RestockForm productId={product.id} />
+            <RestockForm
+              productId={product.id}
+              setComponents={setComponents?.map((c) => ({ component_product_id: c.component_product_id, quantity_per_set: c.quantity_per_set })) || []}
+            />
           </div>
         )}
 

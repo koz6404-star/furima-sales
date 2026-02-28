@@ -11,6 +11,9 @@ export default function NewProductPage() {
   const [sku, setSku] = useState('');
   const [costYen, setCostYen] = useState('');
   const [stock, setStock] = useState('');
+  const [campaign, setCampaign] = useState('');
+  const [size, setSize] = useState('');
+  const [color, setColor] = useState('');
   const [memo, setMemo] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [error, setError] = useState('');
@@ -61,6 +64,9 @@ export default function NewProductPage() {
       sku: sku || null,
       cost_yen: cost,
       stock: stockNum,
+      campaign: campaign || null,
+      size: size || null,
+      color: color || null,
       memo: memo || null,
       image_url: imageUrl,
     });
@@ -119,6 +125,35 @@ export default function NewProductPage() {
               min={0}
               required
             />
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">企画（任意）</label>
+              <input
+                type="text"
+                value={campaign}
+                onChange={(e) => setCampaign(e.target.value)}
+                className="w-full rounded border border-slate-300 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">サイズ（任意）</label>
+              <input
+                type="text"
+                value={size}
+                onChange={(e) => setSize(e.target.value)}
+                className="w-full rounded border border-slate-300 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">色（任意）</label>
+              <input
+                type="text"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="w-full rounded border border-slate-300 px-3 py-2"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">画像（任意）</label>
