@@ -174,29 +174,8 @@ export async function POST(req: NextRequest) {
     let created = 0;
     let updated = 0;
 
-    const skus = rows
-      .map((r) => normalizeRow(r as Record<string, string | number | undefined>))
-      .filter((r) => r.sku)
-      .map((r) => r.sku!);
-    const uniqueSkus = [...new Set(skus)];
-
-    const { data: existingProducts } =
-      uniqueSkus.length > 0
-        ? await supabase
-            .from('products')
-            .select('id, sku')
-            .eq('user_id', user.id)
-            .in('sku', uniqueSkus)
-        : { data: [] as { id: string; sku: string }[] };
-
-    const skuToId = new Map<string, string>();
-    for (const p of existingProducts ?? []) {
-      if (p.sku) skuToId.set(p.sku, p.id);
-    }
-
-    const toInsert: Record<string, unknown>[] = [];
-    const toUpdate: { id: string; data: Record<string, unknown> }[] = [];
-
+    type NormRow = ReturnType<typeof normalizeRow>;
+    const normalized: { row: NormRow; origIndex: number }[] = [];
     for (let i = 0; i < rows.length; i++) {
       const r = normalizeRow(rows[i] as Record<string, string | number | undefined>);
       if (!r.name) {
@@ -207,14 +186,99 @@ export async function POST(req: NextRequest) {
         errors.push(`行${i + 2}: 原価が不正です`);
         continue;
       }
+      normalized.push({ row: r, origIndex: i });
+    }
 
-      let imageUrl: string | null = imageUrlsByIndex[i] ?? null;
+    const bySku = new Map<string, { row: NormRow; origIndex: number }[]>();
+    const noSku: { row: NormRow; origIndex: number }[] = [];
+    for (const item of normalized) {
+      if (item.row.sku?.trim()) {
+        const sku = item.row.sku.trim();
+        if (!bySku.has(sku)) bySku.set(sku, []);
+        bySku.get(sku)!.push(item);
+      } else {
+        noSku.push(item);
+      }
+    }
+
+    const mergedProducts: {
+      sku: string | null;
+      name: string;
+      costYen: number;
+      stock: number;
+      memo?: string;
+      campaign?: string;
+      size?: string;
+      color?: string;
+      imageRef?: string;
+      origIndex: number;
+    }[] = [];
+
+    for (const [, group] of bySku) {
+      const first = group[0];
+      const totalStock = group.reduce((s, g) => s + g.row.stock, 0);
+      const totalCostQty = group.reduce((s, g) => s + g.row.stock * g.row.costYen, 0);
+      const costYen =
+        totalStock > 0 ? Math.round(totalCostQty / totalStock) : Math.round(first.row.costYen);
+
+      mergedProducts.push({
+        sku: first.row.sku ?? null,
+        name: first.row.name,
+        costYen,
+        stock: totalStock,
+        memo: first.row.memo ?? undefined,
+        campaign: first.row.campaign ?? undefined,
+        size: first.row.size ?? undefined,
+        color: first.row.color ?? undefined,
+        imageRef: first.row.imageRef ?? undefined,
+        origIndex: first.origIndex,
+      });
+    }
+
+    for (const item of noSku) {
+      mergedProducts.push({
+        sku: null,
+        name: item.row.name,
+        costYen: item.row.costYen,
+        stock: item.row.stock,
+        memo: item.row.memo ?? undefined,
+        campaign: item.row.campaign ?? undefined,
+        size: item.row.size ?? undefined,
+        color: item.row.color ?? undefined,
+        imageRef: item.row.imageRef ?? undefined,
+        origIndex: item.origIndex,
+      });
+    }
+
+    const uniqueSkus = [...bySku.keys()];
+    const { data: existingProducts } =
+      uniqueSkus.length > 0
+        ? await supabase
+            .from('products')
+            .select('id, sku, stock, cost_yen')
+            .eq('user_id', user.id)
+            .in('sku', uniqueSkus)
+        : { data: [] };
+
+    const skuToExisting = new Map<
+      string,
+      { id: string; sku: string; stock: number; cost_yen: number }
+    >();
+    for (const p of existingProducts ?? []) {
+      if (p.sku) skuToExisting.set(p.sku, p);
+    }
+
+    const toInsert: Record<string, unknown>[] = [];
+    const toUpdate: { id: string; data: Record<string, unknown> }[] = [];
+
+    for (const m of mergedProducts) {
+      let imageUrl: string | null = imageUrlsByIndex[m.origIndex] ?? null;
       if (!imageUrl) {
         const imgBuf = findImageInMap({
-          imageRef: r.imageRef,
-          sku: r.sku,
-          name: r.name,
-          rowIndex: i,
+          imageRef: m.imageRef,
+          sku: m.sku ?? undefined,
+          name: m.name,
+          rowIndex: m.origIndex,
         });
         if (imgBuf) {
           const ext = getExt(imgBuf);
@@ -229,25 +293,36 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      const existingId = r.sku ? skuToId.get(r.sku) : null;
+      const existing = m.sku ? skuToExisting.get(m.sku) : null;
+
+      let costYen = m.costYen;
+      let stock = m.stock;
+      if (existing) {
+        const exStock = Number(existing.stock) || 0;
+        const exCost = Number(existing.cost_yen) || 0;
+        const totalStock = exStock + stock;
+        const totalCostQty = exStock * exCost + stock * m.costYen;
+        costYen = totalStock > 0 ? Math.round(totalCostQty / totalStock) : m.costYen;
+        stock = totalStock;
+      }
 
       const rowData = {
-        name: r.name,
-        cost_yen: r.costYen,
-        stock: r.stock,
-        memo: r.memo || null,
-        campaign: r.campaign || null,
-        size: r.size || null,
-        color: r.color || null,
+        name: m.name,
+        cost_yen: costYen,
+        stock: stock,
+        memo: m.memo || null,
+        campaign: m.campaign || null,
+        size: m.size || null,
+        color: m.color || null,
         ...(imageUrl && { image_url: imageUrl }),
       };
 
-      if (existingId) {
-        toUpdate.push({ id: existingId, data: { ...rowData, updated_at: new Date().toISOString() } });
+      if (existing) {
+        toUpdate.push({ id: existing.id, data: { ...rowData, updated_at: new Date().toISOString() } });
       } else {
         toInsert.push({
           user_id: user.id,
-          sku: r.sku || null,
+          sku: m.sku || null,
           ...rowData,
         });
       }

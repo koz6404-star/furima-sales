@@ -129,7 +129,7 @@ export default function ImportPage() {
           <div>
             <h2 className="font-semibold mb-2">1. Excelファイル（.xlsx）</h2>
             <p className="text-sm text-slate-600 mb-2">
-              推奨列: 商品名, THE CKB SKU, 規格, 商品数, 1個あたりのコスト（円）など。CKB商品管理シート.xlsx は埋め込み画像・規格（サイズ/色）・商品数に自動対応します。
+              推奨列: 商品名, THE CKB SKU, 規格, 商品数, 1個あたりのコスト（円）など。CKB商品管理シート.xlsx は埋め込み画像・規格（サイズ/色）・商品数に自動対応します。同一SKUは在庫合算・原価は加重平均で統一されます。
             </p>
             <p className="text-xs text-slate-500 mb-1">
               ※ExcelはSupabaseに直接アップロードするため、大容量ファイル（埋め込み画像含む）も取り込めます。
