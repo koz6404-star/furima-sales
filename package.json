@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "excel-template": "node scripts/generate-excel-template.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
