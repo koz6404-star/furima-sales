@@ -85,8 +85,11 @@ export function ProductsTableWithActions({
   return (
     <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
       {selected.size > 0 && (
-        <div className="px-4 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-4 flex-wrap">
+        <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center gap-4 flex-wrap">
           <span className="text-sm font-medium">{selected.size}件選択中</span>
+          {selected.size === 1 && allowSetCreation && (
+            <span className="text-sm text-amber-700">あと1件選択でセット出品できます</span>
+          )}
           {canCreateSet && (
             <button
               type="button"
@@ -127,15 +130,16 @@ export function ProductsTableWithActions({
       <table className="w-full">
         <thead className="bg-slate-50">
           <tr>
-            <th className="px-3 py-3 w-12 text-center">
-              <label className="inline-flex items-center gap-1 cursor-pointer">
+            <th className="px-4 py-3 w-14 text-center bg-emerald-50 border-r border-emerald-100">
+              <label className="inline-flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={products.length > 0 && selected.size === products.length}
                   onChange={toggleAll}
-                  className="rounded border-slate-300 w-5 h-5 accent-emerald-600 cursor-pointer"
+                  className="rounded border-2 border-slate-400 w-5 h-5 accent-emerald-600 cursor-pointer flex-shrink-0"
+                  title="全選択"
                 />
-                <span className="text-xs font-medium text-slate-600">選択</span>
+                <span className="text-sm font-semibold text-slate-700">選択</span>
               </label>
             </th>
             <th className="px-4 py-3 text-left text-sm font-semibold">画像</th>
@@ -174,13 +178,16 @@ export function ProductsTableWithActions({
             const gross20 = price20 - fee20 - p.cost_yen;
             return (
               <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
-                <td className="px-3 py-3 w-12 text-center">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(p.id)}
-                    onChange={() => toggle(p.id)}
-                    className="rounded border-slate-300 w-5 h-5 accent-emerald-600 cursor-pointer"
-                  />
+                <td className="px-4 py-3 w-14 min-w-[3.5rem] text-center bg-emerald-50/50 border-r border-emerald-100/50 align-middle p-0">
+                  <label className="flex items-center justify-center cursor-pointer w-full min-h-[3rem] hover:bg-emerald-100/50 py-3 select-none">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(p.id)}
+                      onChange={() => toggle(p.id)}
+                      className="rounded border-2 border-slate-400 w-5 h-5 accent-emerald-600 cursor-pointer flex-shrink-0"
+                      title={`${p.name}を選択`}
+                    />
+                  </label>
                 </td>
                 <td className="px-4 py-3">
                   {p.image_url ? (

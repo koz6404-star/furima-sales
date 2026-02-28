@@ -103,8 +103,13 @@ export default async function ProductDetailPage({
               )}
             </div>
             <div className="flex-1">
-              <div className="flex items-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-xl font-bold">{product.name}</h1>
+                {(product.size || product.color) && (
+                  <span className="text-slate-600 text-base font-normal">
+                    {[product.size && `サイズ:${product.size}`, product.color && `色:${product.color}`].filter(Boolean).join('　')}
+                  </span>
+                )}
                 <Link
                   href={`/products/${product.id}/edit`}
                   className="text-sm text-emerald-600 hover:underline"
@@ -119,23 +124,11 @@ export default async function ProductDetailPage({
                 />
               </div>
               <p className="text-slate-600 mt-1">SKU: {product.sku || '-'}</p>
-              {(product.campaign || product.size || product.color) && (
-                <div className="mt-2 flex flex-wrap gap-3 text-sm">
-                  {product.campaign && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
-                      企画: {product.campaign}
-                    </span>
-                  )}
-                  {product.size && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-blue-100 text-blue-800">
-                      サイズ: {product.size}
-                    </span>
-                  )}
-                  {product.color && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-amber-100 text-amber-800">
-                      色: {product.color}
-                    </span>
-                  )}
+              {product.campaign && (
+                <div className="mt-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-sm">
+                    企画: {product.campaign}
+                  </span>
                 </div>
               )}
               <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
