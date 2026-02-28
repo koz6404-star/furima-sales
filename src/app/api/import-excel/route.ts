@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
         const tl = img.range?.tl;
         if (tl == null) continue;
         const excelRow = typeof tl.nativeRow === 'number' ? tl.nativeRow : (tl as { row?: number }).row ?? 0;
-        const dataRowIdx = excelRow - 2;
+        const dataRowIdx = excelRow - 1;
         if (dataRowIdx < 0) continue;
         const mediaItem =
           media.find((m: { index: number }) => Number(m.index) === Number(img.imageId)) ??
