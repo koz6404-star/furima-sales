@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter, useSearchParams } from 'next/navigation';
+import { VoiceInputButton } from './voice-input-button';
 import { useCallback, useEffect, useState } from 'react';
 
 type MatchType = 'partial' | 'exact';
@@ -94,14 +95,22 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto">
-      <input
-        type="text"
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        placeholder="商品名で検索"
-        className="flex-1 min-w-0 sm:flex-initial sm:w-48 md:w-56 rounded border border-slate-300 px-3 py-2.5 text-base sm:text-sm min-h-[44px] touch-manipulation focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-        aria-label="商品名検索"
-      />
+      <div className="flex flex-1 min-w-0 sm:flex-initial sm:w-48 md:w-56 rounded border border-slate-300 overflow-hidden bg-white focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          placeholder="商品名で検索"
+          className="flex-1 min-w-0 px-3 py-2.5 text-base sm:text-sm min-h-[44px] touch-manipulation focus:outline-none border-0"
+          aria-label="商品名検索"
+        />
+        <VoiceInputButton
+          onResult={(text) => setInputValue(text)}
+          className="rounded-none border-0 border-l border-slate-200 shrink-0"
+          size="md"
+          title="音声で検索"
+        />
+      </div>
       <select
         value={match}
         onChange={handleMatchChange}

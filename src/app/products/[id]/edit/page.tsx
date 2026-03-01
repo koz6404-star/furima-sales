@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Nav } from '@/components/nav';
+import { VoiceInputButton } from '@/components/voice-input-button';
 
 export default function ProductEditPage() {
   const [name, setName] = useState('');
@@ -135,13 +136,16 @@ export default function ProductEditPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">商品名 *</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2"
-              required
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="flex-1 min-w-0 rounded border border-slate-300 px-3 py-2"
+                required
+              />
+              <VoiceInputButton onResult={setName} title="商品名を音声入力" size="md" />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">SKU（取込由来は編集不可）</label>
@@ -222,12 +226,15 @@ export default function ProductEditPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">メモ</label>
-            <textarea
-              value={memo}
-              onChange={(e) => setMemo(e.target.value)}
-              className="w-full rounded border border-slate-300 px-3 py-2"
-              rows={3}
-            />
+            <div className="flex gap-2">
+              <textarea
+                value={memo}
+                onChange={(e) => setMemo(e.target.value)}
+                className="flex-1 min-w-0 rounded border border-slate-300 px-3 py-2"
+                rows={3}
+              />
+              <VoiceInputButton onResult={(t) => setMemo((prev) => (prev ? `${prev} ${t}` : t))} title="メモを音声入力" size="md" />
+            </div>
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
           <div className="flex gap-4">

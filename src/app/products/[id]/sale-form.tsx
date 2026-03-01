@@ -29,13 +29,13 @@ export function SaleForm({
   shippingRates: ShippingRate[];
   settings: Setting[];
 }) {
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState('1');
   const [unitPrice, setUnitPrice] = useState('');
   const [platform, setPlatform] = useState<'mercari' | 'rakuma'>('mercari');
   const [shippingId, setShippingId] = useState('');
   const [shippingYen, setShippingYen] = useState(0);
   const [customShippingYen, setCustomShippingYen] = useState('');
-  const [materialYen, setMaterialYen] = useState(0);
+  const [materialYen, setMaterialYen] = useState('0');
   const [soldAt, setSoldAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -58,20 +58,23 @@ export function SaleForm({
     : selectedShipping?.base_fee_yen ?? shippingYen;
 
   const unitPriceNum = parseInt(unitPrice, 10) || 0;
-  const totalRevenue = unitPriceNum * quantity;
-  const feeYen = unitPriceNum > 0 ? calcFee(unitPriceNum, ratePercent, rounding) * quantity : 0;
-  const grossProfit = unitPriceNum > 0
-    ? calcGrossProfit(unitPriceNum, quantity, feeYen / quantity, effectiveShippingYen, materialYen, costYen)
+  const quantityNum = parseInt(quantity, 10) || 0;
+  const materialYenNum = parseInt(materialYen, 10) || 0;
+  const totalRevenue = unitPriceNum * quantityNum;
+  const feeYen = unitPriceNum > 0 ? calcFee(unitPriceNum, ratePercent, rounding) * quantityNum : 0;
+  const grossProfit = unitPriceNum > 0 && quantityNum > 0
+    ? calcGrossProfit(unitPriceNum, quantityNum, feeYen / quantityNum, effectiveShippingYen, materialYenNum, costYen)
     : 0;
-  const profitRatePercent = unitPriceNum > 0 && costYen > 0
-    ? calcProfitRatePercent(grossProfit, costYen * quantity)
+  const profitRatePercent = unitPriceNum > 0 && costYen > 0 && quantityNum > 0
+    ? calcProfitRatePercent(grossProfit, costYen * quantityNum)
     : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (quantity < 1 || quantity > currentStock) {
-      setError(`在庫は${currentStock}個です`);
+    const qty = parseInt(quantity, 10);
+    if (!Number.isInteger(qty) || qty < 1 || qty > currentStock) {
+      setError(`販売個数は1〜${currentStock}の整数で入力してください`);
       return;
     }
     if (unitPriceNum <= 0) {
@@ -86,18 +89,18 @@ export function SaleForm({
       return;
     }
     const feePerUnit = calcFee(unitPriceNum, ratePercent, rounding);
-    const gross = calcGrossProfit(unitPriceNum, quantity, feePerUnit, effectiveShippingYen, materialYen, costYen);
+    const gross = calcGrossProfit(unitPriceNum, qty, feePerUnit, effectiveShippingYen, materialYenNum, costYen);
     const { error: saleError } = await supabase.from('sales').insert({
       user_id: user.id,
       product_id: productId,
-      quantity,
+      quantity: qty,
       unit_price_yen: unitPriceNum,
       platform,
       fee_rate_percent: ratePercent,
-      fee_yen: feePerUnit * quantity,
+      fee_yen: feePerUnit * qty,
       shipping_id: shippingId || null,
       shipping_yen: effectiveShippingYen,
-      material_yen: materialYen,
+      material_yen: materialYenNum,
       gross_profit_yen: gross,
       sold_at: soldAt,
     });
@@ -106,9 +109,9 @@ export function SaleForm({
       setLoading(false);
       return;
     }
-    const newStock = currentStock - quantity;
+    const newStock = currentStock - qty;
     const { deductLocationStock } = await import('@/lib/location-stock');
-    const { newHome, newWarehouse } = deductLocationStock(stockAtHome, stockAtWarehouse, quantity);
+    const { newHome, newWarehouse } = deductLocationStock(stockAtHome, stockAtWarehouse, qty);
     const now = new Date().toISOString();
 
     const upsertLoc = async (loc: 'home' | 'warehouse', qty: number) => {
@@ -152,9 +155,10 @@ export function SaleForm({
           <input
             type="number"
             value={quantity}
-            onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
+            onChange={(e) => setQuantity(e.target.value)}
             min={1}
             max={currentStock}
+            placeholder="1"
             className="w-full rounded border px-3 py-2"
           />
         </div>
@@ -219,8 +223,9 @@ export function SaleForm({
         <input
           type="number"
           value={materialYen}
-          onChange={(e) => setMaterialYen(parseInt(e.target.value, 10) || 0)}
+          onChange={(e) => setMaterialYen(e.target.value)}
           min={0}
+          placeholder="0"
           className="w-full rounded border px-3 py-2"
         />
       </div>
