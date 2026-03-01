@@ -174,9 +174,9 @@ INSERT INTO shipping_rates (platform, display_name, base_fee_yen, size_label) VA
   ('mercari', 'スマートレター', 180, NULL);
 
 INSERT INTO shipping_rates (platform, display_name, base_fee_yen, size_label) VALUES
-  ('rakuma', 'ゆうパケット', 200, NULL),
+  ('rakuma', 'ゆうパケット', 180, NULL),
   ('rakuma', 'ゆうパケットポスト', 175, NULL),
-  ('rakuma', 'ゆうパケットポストmini', 150, NULL),
+  ('rakuma', 'ゆうパケットポストmini', 160, NULL),
   ('rakuma', 'ゆうパケットプラス', 380, NULL),
   ('rakuma', 'ゆうパック60', 700, '60'),
   ('rakuma', 'ゆうパック80', 800, '80'),
@@ -186,13 +186,13 @@ INSERT INTO shipping_rates (platform, display_name, base_fee_yen, size_label) VA
   ('rakuma', 'ゆうパック160', 1500, '160'),
   ('rakuma', 'ゆうパック170', 1500, '170'),
   ('rakuma', 'ネコポス', 200, NULL),
-  ('rakuma', '宅急便コンパクト', 430, NULL),
-  ('rakuma', '宅急便60', 650, '60'),
-  ('rakuma', '宅急便80', 750, '80'),
-  ('rakuma', '宅急便100', 1050, '100'),
-  ('rakuma', '宅急便120', 1200, '120'),
-  ('rakuma', '宅急便140', 1400, '140'),
-  ('rakuma', '宅急便160', 1500, '160'),
+  ('rakuma', '宅急便コンパクト', 590, NULL),
+  ('rakuma', '宅急便60', 900, '60'),
+  ('rakuma', '宅急便80', 1000, '80'),
+  ('rakuma', '宅急便100', 1150, '100'),
+  ('rakuma', '宅急便120', 1350, '120'),
+  ('rakuma', '宅急便140', 1800, '140'),
+  ('rakuma', '宅急便160', 2000, '160'),
   ('rakuma', '宅急便180', 2800, '180'),
   ('rakuma', '宅急便200', 3350, '200');
 
