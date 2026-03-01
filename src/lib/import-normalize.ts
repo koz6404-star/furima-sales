@@ -130,12 +130,26 @@ export function normalizeRow(row: ExcelRow): NormalizedProduct {
   }
   if (shippedAtVal === undefined || shippedAtVal === null || shippedAtVal === '') {
     const keys = Object.keys(row);
-    for (const i of [5, 6, 7]) {
+    for (const i of [5, 6, 7, 4, 8]) {
       if (keys[i]) {
         const v = row[keys[i]];
         const parsed = parseDateForStock(v as string | number | Date);
         if (parsed) {
           shippedAtVal = v as string | number | Date;
+          break;
+        }
+      }
+    }
+  }
+  if (shippedAtVal === undefined || shippedAtVal === null || shippedAtVal === '') {
+    const dateStr = /^\d{4}[-/]\d{1,2}[-/]\d{1,2}/;
+    for (const [key, val] of Object.entries(row)) {
+      if (val === undefined || val === null || val === '') continue;
+      const str = String(val).trim();
+      if (dateStr.test(str) || (typeof val === 'object' && 'getFullYear' in val)) {
+        const parsed = parseDateForStock(val as string | number | Date);
+        if (parsed) {
+          shippedAtVal = val as string | number | Date;
           break;
         }
       }
@@ -166,12 +180,14 @@ function parseDateForStock(val: string | number | Date | undefined): string | nu
   const s = String(val).trim();
   if (!s) return null;
   const num = Number(s);
-  if (!Number.isNaN(num) && num > 0) {
+  if (!Number.isNaN(num) && num > 30000 && num < 55000) {
     const d = XLSXDateToJSDate(Math.floor(num));
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
   const m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  const m0 = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})\s+\d/);
+  if (m0) return `${m0[1]}-${m0[2].padStart(2, '0')}-${m0[3].padStart(2, '0')}`;
   const m2 = s.match(/^(\d{4})(\d{2})(\d{2})/);
   if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
   const m3 = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日?/);
