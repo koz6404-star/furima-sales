@@ -85,7 +85,7 @@ export function ProductsTableWithActions({
   const canCreateSet = allowSetCreation && selectedProductObjects.length >= 2;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
+      <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
       {selected.size > 0 && (
         <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center gap-4 flex-wrap">
           <span className="text-sm font-medium">{selected.size}件選択中</span>
@@ -129,7 +129,8 @@ export function ProductsTableWithActions({
           }}
         />
       )}
-      <table className="w-full">
+      <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px]">
         <thead className="bg-slate-50">
           <tr>
             <th className="px-4 py-3 w-14 text-center bg-emerald-50 border-r border-emerald-100">
@@ -147,7 +148,6 @@ export function ProductsTableWithActions({
             <th className="px-4 py-3 text-left text-sm font-semibold">画像</th>
             <th className="px-4 py-3 text-left text-sm font-semibold">商品名</th>
             <th className="px-4 py-3 text-left text-sm font-semibold">企画/サイズ/色</th>
-            <th className="px-4 py-3 text-left text-sm font-semibold">SKU</th>
             {showStock && (
               <th className="px-4 py-3 text-right text-sm font-semibold">在庫</th>
             )}
@@ -167,7 +167,7 @@ export function ProductsTableWithActions({
           {(!products || products.length === 0) && (
             <tr>
               <td
-                colSpan={showStock ? 12 : 8}
+                colSpan={showStock ? 11 : 7}
                 className="px-4 py-8 text-center text-slate-500"
               >
                 {showStock ? '在庫ありの商品がありません' : '完売商品がありません'}
@@ -175,13 +175,14 @@ export function ProductsTableWithActions({
             </tr>
           )}
           {products?.map((p) => {
+            const hasDefaultShipping = p.default_shipping_yen != null;
             const defaultShippingYen = p.default_shipping_yen ?? 210;
             const defaultMaterialYen = 0;
             const feeRatePercent = 10;
-            const price20 = calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 20);
-            const price30 = calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 30);
-            const fee20 = calcFee(price20, feeRatePercent, 'floor');
-            const gross20 = price20 - fee20 - defaultShippingYen - defaultMaterialYen - p.cost_yen;
+            const price20 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 20) : 0;
+            const price30 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 30) : 0;
+            const fee20 = hasDefaultShipping ? calcFee(price20, feeRatePercent, 'floor') : 0;
+            const gross20 = hasDefaultShipping ? price20 - fee20 - defaultShippingYen - defaultMaterialYen - p.cost_yen : 0;
             return (
               <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-3 w-14 min-w-[3.5rem] text-center bg-emerald-50/50 border-r border-emerald-100/50 align-middle p-0">
@@ -215,7 +216,6 @@ export function ProductsTableWithActions({
                 <td className="px-4 py-3 text-slate-600 text-sm">
                   {[p.campaign, p.size, p.color].filter(Boolean).join(' / ') || '-'}
                 </td>
-                <td className="px-4 py-3 text-slate-600">{p.sku || '-'}</td>
                 {showStock && (
                   <td className="px-4 py-3 text-right">{p.stock}</td>
                 )}
@@ -225,23 +225,23 @@ export function ProductsTableWithActions({
                 <td className="px-4 py-3 text-right">¥{p.cost_yen.toLocaleString()}</td>
                 {showStock && (
                   <>
-                    <td className="px-4 py-3 text-right">¥{price20.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right">¥{price30.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right">¥{gross20.toLocaleString()}</td>
+                    <td className={`px-4 py-3 text-right ${!hasDefaultShipping ? 'text-slate-400' : ''}`}>{hasDefaultShipping ? `¥${price20.toLocaleString()}` : '—'}</td>
+                    <td className={`px-4 py-3 text-right ${!hasDefaultShipping ? 'text-slate-400' : ''}`}>{hasDefaultShipping ? `¥${price30.toLocaleString()}` : '—'}</td>
+                    <td className={`px-4 py-3 text-right ${!hasDefaultShipping ? 'text-slate-400' : ''}`}>{hasDefaultShipping ? `¥${gross20.toLocaleString()}` : '—'}</td>
                   </>
                 )}
-                <td className="px-4 py-3 flex gap-2 items-center">
+                <td className="px-3 sm:px-4 py-3 flex gap-2 items-center">
                   <Link
                     href={`/products/${p.id}`}
-                    className="text-emerald-600 hover:underline text-sm"
+                    className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] min-w-[4.5rem] touch-manipulation"
                   >
-                    {showStock ? '詳細' : '詳細・再入荷'}
+                    {showStock ? '詳細' : '詳細'}
                   </Link>
                   <ProductDeleteButton
                     productId={p.id}
                     productName={p.name}
                     redirectTo={redirectAfterDelete}
-                    variant="ghost"
+                    variant="icon"
                   />
                 </td>
               </tr>
@@ -249,6 +249,7 @@ export function ProductsTableWithActions({
           })}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

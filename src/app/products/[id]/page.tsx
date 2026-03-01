@@ -89,11 +89,11 @@ export default async function ProductDetailPage({
         <Link href={product.stock > 0 ? '/products' : '/products/sold-out'} className="text-emerald-600 hover:underline mb-4 inline-block">
           ← 一覧に戻る
         </Link>
-        <div className="rounded-lg border border-slate-200 bg-white p-6 mb-6">
-          <div className="flex gap-6">
-            <div className="flex-shrink-0">
+        <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-6 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+            <div className="flex-shrink-0 mx-auto sm:mx-0">
               {product.image_url ? (
-                <div className="relative h-32 w-32">
+                <div className="relative h-28 w-28 sm:h-32 sm:w-32">
                   <Image
                     src={product.image_url}
                     alt={product.name}
@@ -102,7 +102,7 @@ export default async function ProductDetailPage({
                   />
                 </div>
               ) : (
-                <div className="h-32 w-32 bg-slate-200 rounded-lg flex items-center justify-center text-slate-400">
+                <div className="h-28 w-28 sm:h-32 sm:w-32 bg-slate-200 rounded-lg flex items-center justify-center text-slate-400">
                   画像なし
                 </div>
               )}
@@ -117,7 +117,7 @@ export default async function ProductDetailPage({
                 )}
                 <Link
                   href={`/products/${product.id}/edit`}
-                  className="text-sm text-emerald-600 hover:underline"
+                  className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] touch-manipulation"
                 >
                   編集
                 </Link>
@@ -125,7 +125,7 @@ export default async function ProductDetailPage({
                   productId={product.id}
                   productName={product.name}
                   redirectTo={product.stock > 0 ? '/products' : '/products/sold-out'}
-                  variant="ghost"
+                  variant="icon"
                 />
               </div>
               <p className="text-slate-600 mt-1">SKU: {product.sku || '-'}</p>
