@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 import { createClient } from '@/lib/supabase/server';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
