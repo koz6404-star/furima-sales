@@ -23,15 +23,20 @@ export function deductLocationStock(
   homeQty: number,
   warehouseQty: number,
   deduct: number
-): { newHome: number; newWarehouse: number } {
-  let fromHome = Math.min(homeQty, deduct);
-  let fromWarehouse = deduct - fromHome;
+): { newHome: number; newWarehouse: number; actualDeducted: number } {
+  const available = homeQty + warehouseQty;
+  const actualDeduct = Math.min(deduct, available);
+  let fromHome = Math.min(homeQty, actualDeduct);
+  let fromWarehouse = actualDeduct - fromHome;
   if (fromWarehouse > warehouseQty) {
     fromWarehouse = warehouseQty;
-    fromHome = deduct - fromWarehouse;
+    fromHome = actualDeduct - fromWarehouse;
   }
+  const newHome = Math.max(0, homeQty - fromHome);
+  const newWarehouse = Math.max(0, warehouseQty - fromWarehouse);
   return {
-    newHome: Math.max(0, homeQty - fromHome),
-    newWarehouse: Math.max(0, warehouseQty - fromWarehouse),
+    newHome,
+    newWarehouse,
+    actualDeducted: (homeQty - newHome) + (warehouseQty - newWarehouse),
   };
 }

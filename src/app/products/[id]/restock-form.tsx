@@ -39,8 +39,12 @@ export function RestockForm({
           .select('stock')
           .eq('id', c.component_product_id)
           .single();
+        const { data: locRows } = await supabase.from('product_location_stock').select('location, quantity').eq('product_id', c.component_product_id);
+        const homeQ = locRows?.find((r) => r.location === 'home')?.quantity ?? 0;
+        const whQ = locRows?.find((r) => r.location === 'warehouse')?.quantity ?? 0;
+        const available = (locRows?.length ?? 0) > 0 ? homeQ + whQ : (comp?.stock ?? 0);
         const needed = num * c.quantity_per_set;
-        if (!comp || comp.stock < needed) {
+        if (!comp || available < needed) {
           setError(`構成商品の在庫不足です。${num}セット追加には各${c.quantity_per_set}個×${num}個が必要です。`);
           setLoading(false);
           return;
@@ -54,7 +58,12 @@ export function RestockForm({
         const whQ = locRows?.find((r) => r.location === 'warehouse')?.quantity ?? 0;
         if (!comp) continue;
         const deduct = num * c.quantity_per_set;
-        const { newHome, newWarehouse } = deductLocationStock(homeQ, whQ, deduct);
+        const { newHome, newWarehouse, actualDeducted } = deductLocationStock(homeQ, whQ, deduct);
+        if (actualDeducted < deduct) {
+          setError(`構成商品の在庫が実際の保管場所と一致しません。しばらくしてから再度お試しください。`);
+          setLoading(false);
+          return;
+        }
         const nnow = new Date().toISOString();
         const upsertLoc = async (loc: 'home' | 'warehouse', qty: number) => {
           const { data: ex } = await supabase.from('product_location_stock').select('quantity').eq('product_id', c.component_product_id).eq('location', loc).single();
@@ -63,7 +72,7 @@ export function RestockForm({
         };
         await upsertLoc('home', newHome);
         await upsertLoc('warehouse', newWarehouse);
-        const newStock = comp.stock - deduct;
+        const newStock = comp.stock - actualDeducted;
         await supabase
           .from('products')
           .update({ stock: Math.max(0, newStock), ...(newStock === 0 && { oldest_received_at: null }), updated_at: nnow })
@@ -74,6 +83,13 @@ export function RestockForm({
     const today = new Date().toISOString().slice(0, 10);
     const now = new Date().toISOString();
     const locToUse = isSet ? 'home' : location;
+    const { data: currentProduct } = await supabase
+      .from('products')
+      .select('stock')
+      .eq('id', productId)
+      .single();
+    const currentStock = currentProduct?.stock ?? 0;
+    const newStock = currentStock + num;
     const { data: existingLoc } = await supabase
       .from('product_location_stock')
       .select('quantity')
@@ -88,7 +104,7 @@ export function RestockForm({
     }
     const { error: updateErr } = await supabase
       .from('products')
-      .update({ stock: num, oldest_received_at: today, updated_at: now })
+      .update({ stock: newStock, oldest_received_at: today, updated_at: now })
       .eq('id', productId);
     setLoading(false);
     if (updateErr) {

@@ -10,6 +10,30 @@ import { ProductDeleteButton } from './product-delete-button';
 import { SetCreateModal } from './set-create-modal';
 import { StockAgeBadge } from './stock-age-badge';
 
+const SELECTION_STORAGE_KEY = 'products-set-selection';
+
+function loadSelectedFromStorage(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = sessionStorage.getItem(SELECTION_STORAGE_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveSelectedToStorage(ids: Set<string>) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (ids.size === 0) sessionStorage.removeItem(SELECTION_STORAGE_KEY);
+    else sessionStorage.setItem(SELECTION_STORAGE_KEY, JSON.stringify([...ids]));
+  } catch {
+    //
+  }
+}
+
 type Product = {
   id: string;
   name: string;
@@ -41,9 +65,11 @@ export function ProductsTableWithActions({
   fromParam?: 'products' | 'sold-out' | 'by-profit';
 }) {
   const from = fromParam ?? (redirectAfterDelete === '/products' ? 'products' : redirectAfterDelete === '/products/by-profit' ? 'by-profit' : 'sold-out');
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<string>>(loadSelectedFromStorage);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showSetModal, setShowSetModal] = useState(false);
+  const [modalProducts, setModalProducts] = useState<Product[] | null>(null);
+  const [preparingSetModal, setPreparingSetModal] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -52,16 +78,29 @@ export function ProductsTableWithActions({
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
+      saveSelectedToStorage(next);
       return next;
     });
   };
 
   const toggleAll = () => {
-    if (selected.size === products.length) {
-      setSelected(new Set());
-    } else {
-      setSelected(new Set(products.map((p) => p.id)));
-    }
+    const currentIds = new Set(products.map((p) => p.id));
+    const allCurrentSelected = [...currentIds].every((id) => selected.has(id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allCurrentSelected) {
+        currentIds.forEach((id) => next.delete(id));
+      } else {
+        currentIds.forEach((id) => next.add(id));
+      }
+      saveSelectedToStorage(next);
+      return next;
+    });
+  };
+
+  const clearSelection = () => {
+    setSelected(new Set());
+    saveSelectedToStorage(new Set());
   };
 
   const bulkDelete = async () => {
@@ -83,15 +122,34 @@ export function ProductsTableWithActions({
       if (error) failed++;
     }
     setBulkDeleting(false);
-    setSelected(new Set());
+    clearSelection();
     router.refresh();
     if (failed > 0) {
       alert(`${ids.length - failed}件削除しましたが、${failed}件は失敗しました。`);
     }
   };
 
-  const selectedProductObjects = products.filter((p) => selected.has(p.id));
-  const canCreateSet = allowSetCreation && selectedProductObjects.length >= 1;
+  const canCreateSet = allowSetCreation && selected.size >= 1;
+
+  const openSetModal = async () => {
+    if (selected.size < 1) return;
+    setPreparingSetModal(true);
+    const ids = Array.from(selected);
+    const fromCurrent = products.filter((p) => selected.has(p.id));
+    const missingIds = ids.filter((id) => !products.some((p) => p.id === id));
+    let allProducts: Product[] = [...fromCurrent];
+    if (missingIds.length > 0) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase.from('products').select('id, name, sku, cost_yen, stock, image_url, campaign, size, color, stock_received_at, oldest_received_at, default_shipping_yen').in('id', missingIds).eq('user_id', user.id);
+        if (data) allProducts = [...fromCurrent, ...data];
+      }
+    }
+    allProducts = ids.map((id) => allProducts.find((p) => p.id === id)).filter((p): p is Product => !!p);
+    setModalProducts(allProducts);
+    setShowSetModal(true);
+    setPreparingSetModal(false);
+  };
 
   return (
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
@@ -104,10 +162,11 @@ export function ProductsTableWithActions({
           {canCreateSet && (
             <button
               type="button"
-              onClick={() => setShowSetModal(true)}
-              className="rounded px-4 py-2.5 bg-emerald-600 text-white text-sm min-h-[44px] touch-manipulation hover:bg-emerald-700"
+              onClick={openSetModal}
+              disabled={preparingSetModal}
+              className="rounded px-4 py-2.5 bg-emerald-600 text-white text-sm min-h-[44px] touch-manipulation hover:bg-emerald-700 disabled:opacity-50"
             >
-              セット出品
+              {preparingSetModal ? '読み込み中...' : 'セット出品'}
             </button>
           )}
           <button
@@ -120,20 +179,24 @@ export function ProductsTableWithActions({
           </button>
           <button
             type="button"
-            onClick={() => setSelected(new Set())}
+            onClick={clearSelection}
             className="text-slate-600 text-sm min-h-[44px] touch-manipulation flex items-center hover:underline"
           >
-            選択解除
+            選択をクリア
           </button>
         </div>
       )}
-      {showSetModal && canCreateSet && (
+      {showSetModal && modalProducts && modalProducts.length >= 1 && (
         <SetCreateModal
-          selectedProducts={selectedProductObjects}
-          onClose={() => setShowSetModal(false)}
+          selectedProducts={modalProducts}
+          onClose={() => {
+            setShowSetModal(false);
+            setModalProducts(null);
+          }}
           onSuccess={() => {
             setShowSetModal(false);
-            setSelected(new Set());
+            setModalProducts(null);
+            clearSelection();
             router.refresh();
           }}
         />
@@ -228,7 +291,7 @@ export function ProductsTableWithActions({
               <label className="inline-flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
-                  checked={products.length > 0 && selected.size === products.length}
+                  checked={products.length > 0 && products.every((p) => selected.has(p.id))}
                   onChange={toggleAll}
                   className="rounded border-2 border-slate-400 w-5 h-5 accent-emerald-600 cursor-pointer flex-shrink-0"
                   title="全選択"

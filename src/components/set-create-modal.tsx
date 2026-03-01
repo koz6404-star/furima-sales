@@ -70,6 +70,24 @@ export function SetCreateModal({
       return;
     }
 
+    // 構成商品の実際の利用可能在庫を取得（product_location_stock 優先で整合性を保つ）
+    const availablePerProduct: Record<string, number> = {};
+    for (const p of selectedProducts) {
+      const { data: locRows } = await supabase.from('product_location_stock').select('location, quantity').eq('product_id', p.id);
+      const homeQ = locRows?.find((r: { location: string }) => r.location === 'home')?.quantity ?? 0;
+      const whQ = locRows?.find((r: { location: string }) => r.location === 'warehouse')?.quantity ?? 0;
+      const locTotal = (locRows?.length ?? 0) > 0 ? homeQ + whQ : p.stock;
+      availablePerProduct[p.id] = locTotal;
+    }
+    const actualMinStock = isSingleProduct
+      ? Math.floor((availablePerProduct[selectedProducts[0].id] ?? 0) / quantityPerSet)
+      : Math.min(...selectedProducts.map((p) => availablePerProduct[p.id] ?? 0));
+    if (initialStock > actualMinStock) {
+      setError(`在庫が不足しています。最大${actualMinStock}セットまで作成できます。`);
+      setLoading(false);
+      return;
+    }
+
     const today = new Date().toISOString().slice(0, 10);
     const { data: newProduct, error: insertErr } = await supabase
       .from('products')
@@ -110,7 +128,13 @@ export function SetCreateModal({
       const { data: locRows } = await supabase.from('product_location_stock').select('location, quantity').eq('product_id', p.id);
       const homeQ = locRows?.find((r: { location: string }) => r.location === 'home')?.quantity ?? 0;
       const whQ = locRows?.find((r: { location: string }) => r.location === 'warehouse')?.quantity ?? 0;
-      const { newHome, newWarehouse } = deductLocationStock(homeQ, whQ, deduct);
+      const { newHome, newWarehouse, actualDeducted } = deductLocationStock(homeQ, whQ, deduct);
+      if (actualDeducted < deduct) {
+        await supabase.from('products').delete().eq('id', newProduct.id);
+        setError('在庫の整合性エラーです。しばらくしてから再度お試しください。');
+        setLoading(false);
+        return;
+      }
       const now = new Date().toISOString();
       const upsertLoc = async (loc: string, qty: number) => {
         const { data: ex } = await supabase.from('product_location_stock').select('quantity').eq('product_id', p.id).eq('location', loc).single();
@@ -119,7 +143,7 @@ export function SetCreateModal({
       };
       await upsertLoc('home', newHome);
       await upsertLoc('warehouse', newWarehouse);
-      const newStock = p.stock - deduct;
+      const newStock = p.stock - actualDeducted;
       const { error: updateErr } = await supabase
         .from('products')
         .update({ stock: newStock, ...(newStock === 0 && { oldest_received_at: null }), updated_at: now })
