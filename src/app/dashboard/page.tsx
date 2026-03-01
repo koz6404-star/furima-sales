@@ -148,7 +148,7 @@ export default async function DashboardPage({
             aria-hidden
           >
             <img
-              src="https://www.genspark.ai/api/files/s/mcgSbmtM?cache_control=3600"
+              src="/dashboard-mascot.png"
               alt="統計確認キャラクター"
               width={135}
               height={135}

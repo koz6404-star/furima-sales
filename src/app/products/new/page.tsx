@@ -99,7 +99,9 @@ export default function NewProductPage() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="container mx-auto px-4 py-8 max-w-xl">
+      <main className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:gap-8">
+          <div className="flex-1 min-w-0 max-w-xl">
         <h1 className="text-2xl font-bold mb-6">商品登録（手動）</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -230,6 +232,20 @@ export default function NewProductPage() {
             </Link>
           </div>
         </form>
+          </div>
+          <div
+            className="form-guide-mascot hidden lg:flex flex-shrink-0 items-center justify-center lg:pt-16"
+            aria-hidden
+          >
+            <img
+              src="/form-guide.png"
+              alt="入力ガイドキャラクター"
+              width={130}
+              height={130}
+              className="w-[120px] xl:w-[130px] h-auto object-contain drop-shadow-sm"
+            />
+          </div>
+        </div>
       </main>
     </div>
   );
