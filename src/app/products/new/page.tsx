@@ -9,6 +9,7 @@ import { Nav } from '@/components/nav';
 export default function NewProductPage() {
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
+  const [customSku, setCustomSku] = useState('');
   const [costYen, setCostYen] = useState('');
   const [stock, setStock] = useState('');
   const [campaign, setCampaign] = useState('');
@@ -77,6 +78,7 @@ export default function NewProductPage() {
       user_id: user.id,
       name,
       sku: sku || null,
+      custom_sku: customSku.trim() || null,
       cost_yen: cost,
       stock: stockNum,
       campaign: campaign || null,
@@ -86,6 +88,9 @@ export default function NewProductPage() {
       image_url: imageUrl,
       stock_received_at: stockReceivedAt.trim() || null,
       default_shipping_yen: defaultShippingYen ? parseInt(defaultShippingYen, 10) : null,
+      ...(stockNum > 0 && {
+        oldest_received_at: stockReceivedAt.trim() || new Date().toISOString().slice(0, 10),
+      }),
     });
     setLoading(false);
     if (error) {
@@ -103,11 +108,12 @@ export default function NewProductPage() {
         <div className="flex items-center gap-4 mb-6">
           <h1 className="text-2xl font-bold">商品登録（手動）</h1>
           <img
-            src="/shiba-registration.png"
+            src="/shiba-registration.png?v=2"
             alt="入力ガイド"
             width={80}
             height={80}
             className="hidden md:block w-[80px] h-auto object-contain flex-shrink-0"
+            style={{ backgroundColor: '#f8fafc' }}
           />
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -123,11 +129,23 @@ export default function NewProductPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">SKU（任意）</label>
+            <p className="text-xs text-slate-500 mb-1">Excel取込時の同一SKUで在庫合算・荷重平均に使用</p>
             <input
               type="text"
               value={sku}
               onChange={(e) => setSku(e.target.value)}
               className="w-full rounded border border-slate-300 px-3 py-2"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">管理番号（任意）</label>
+            <p className="text-xs text-slate-500 mb-1">ご自身の管理用に別の番号を付ける場合</p>
+            <input
+              type="text"
+              value={customSku}
+              onChange={(e) => setCustomSku(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2"
+              placeholder="例: A-001"
             />
           </div>
           <div>

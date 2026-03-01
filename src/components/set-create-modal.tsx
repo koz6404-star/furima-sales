@@ -50,6 +50,7 @@ export function SetCreateModal({
       return;
     }
 
+    const today = new Date().toISOString().slice(0, 10);
     const { data: newProduct, error: insertErr } = await supabase
       .from('products')
       .insert({
@@ -57,6 +58,7 @@ export function SetCreateModal({
         name: name.trim(),
         cost_yen: totalCost,
         stock: initialStock,
+        oldest_received_at: today,
       })
       .select('id')
       .single();
@@ -81,10 +83,12 @@ export function SetCreateModal({
     }
 
     for (const p of selectedProducts) {
+      const newStock = p.stock - initialStock;
       const { error: updateErr } = await supabase
         .from('products')
         .update({
-          stock: p.stock - initialStock,
+          stock: newStock,
+          ...(newStock === 0 && { oldest_received_at: null }),
           updated_at: new Date().toISOString(),
         })
         .eq('id', p.id)

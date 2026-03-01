@@ -60,6 +60,25 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_received_at DATE;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS default_shipping_yen INT;
 ```
 
+### 不良在庫判定（oldest_received_at）を追加する場合
+
+入荷からの経過日数で「注意/警告/危険」を表示する場合は、SQL Editor で以下を実行してください:
+
+```sql
+-- supabase/migrations/009_oldest_received_at.sql の内容
+ALTER TABLE products ADD COLUMN IF NOT EXISTS oldest_received_at DATE;
+```
+
+### SKU編集制限と管理番号を追加する場合
+
+Excel取込品のSKUを編集不可にし、ユーザー用の管理番号（custom_sku）を使えるようにする場合は、SQL Editor で以下を実行してください:
+
+```sql
+-- supabase/migrations/008_sku_locked_and_custom_sku.sql の内容
+ALTER TABLE products ADD COLUMN IF NOT EXISTS sku_locked BOOLEAN DEFAULT false;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS custom_sku TEXT;
+```
+
 ### Excel取込で画像を反映する場合（Storage ポリシー）
 
 Excelの埋め込み画像をアップロードするには、SQL Editor で以下を実行してください:

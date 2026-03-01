@@ -15,17 +15,18 @@ export function MascotQA() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 left-6 z-[100] w-[60px] md:w-[100px] pointer-events-auto cursor-pointer hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-lg"
+        className="fixed bottom-6 left-6 z-[100] w-[60px] md:w-[100px] pointer-events-auto cursor-pointer hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-lg bg-transparent border-0 p-0 appearance-none shadow-none"
         aria-label="よくある質問を表示"
         title="よくある質問"
       >
         <img
-          src="/images/mcgSbmtM.png"
+          src="/images/mcgSbmtM.png?v=2"
           alt="マスコット"
           width={100}
           height={100}
-          className="w-full h-auto object-contain drop-shadow-sm"
-          style={{ background: 'transparent' }}
+          className="w-full h-auto object-contain drop-shadow-sm select-none"
+          style={{ backgroundColor: '#f8fafc' }}
+          draggable={false}
         />
       </button>
 

@@ -102,9 +102,14 @@ export function SaleForm({
       setLoading(false);
       return;
     }
+    const newStock = currentStock - quantity;
     const { error: updateError } = await supabase
       .from('products')
-      .update({ stock: currentStock - quantity, updated_at: new Date().toISOString() })
+      .update({
+        stock: newStock,
+        ...(newStock === 0 && { oldest_received_at: null }),
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', productId);
     if (updateError) {
       setError(updateError.message);

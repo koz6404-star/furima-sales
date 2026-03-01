@@ -69,6 +69,9 @@ CREATE TABLE products (
   color TEXT,
   stock_received_at DATE,
   default_shipping_yen INT,
+  sku_locked BOOLEAN DEFAULT false,
+  custom_sku TEXT,
+  oldest_received_at DATE,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

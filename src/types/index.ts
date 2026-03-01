@@ -29,6 +29,8 @@ export interface Product {
   id: string;
   user_id: string;
   sku: string | null;
+  sku_locked?: boolean;
+  custom_sku?: string | null;
   name: string;
   cost_yen: number;
   stock: number;

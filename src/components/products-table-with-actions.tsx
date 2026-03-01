@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { calcTargetPriceForMargin } from '@/lib/calculations';
 import { ProductDeleteButton } from './product-delete-button';
 import { SetCreateModal } from './set-create-modal';
+import { StockAgeBadge } from './stock-age-badge';
 
 type Product = {
   id: string;
@@ -20,6 +21,7 @@ type Product = {
   size: string | null;
   color: string | null;
   stock_received_at?: string | null;
+  oldest_received_at?: string | null;
   default_shipping_yen?: number | null;
 };
 
@@ -172,7 +174,8 @@ export function ProductsTableWithActions({
                     <p className="text-sm text-slate-500 mt-0.5">
                       {[p.campaign, p.size, p.color].filter(Boolean).join(' / ') || '-'}
                     </p>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-sm text-slate-600">
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-sm text-slate-600 items-center">
+                      <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="badge-only" />
                       {showStock && <span>在庫: {p.stock}</span>}
                       <span>{p.stock_received_at ? String(p.stock_received_at).slice(0, 10) : '-'}</span>
                       <span>¥{p.cost_yen.toLocaleString()}</span>
@@ -225,6 +228,7 @@ export function ProductsTableWithActions({
             <th className="px-4 py-3 text-left text-sm font-semibold">画像</th>
             <th className="px-4 py-3 text-left text-sm font-semibold">商品名</th>
             <th className="px-4 py-3 text-left text-sm font-semibold">企画/サイズ/色</th>
+            <th className="px-4 py-3 text-left text-sm font-semibold">状態</th>
             {showStock && (
               <th className="px-4 py-3 text-right text-sm font-semibold">在庫</th>
             )}
@@ -243,7 +247,7 @@ export function ProductsTableWithActions({
           {(!products || products.length === 0) && (
             <tr>
               <td
-                colSpan={showStock ? 10 : 7}
+                colSpan={showStock ? 11 : 8}
                 className="px-4 py-8 text-center text-slate-500"
               >
                 {showStock ? '在庫ありの商品がありません' : '完売商品がありません'}
@@ -289,6 +293,9 @@ export function ProductsTableWithActions({
                 <td className="px-4 py-3 font-medium">{p.name}</td>
                 <td className="px-4 py-3 text-slate-600 text-sm">
                   {[p.campaign, p.size, p.color].filter(Boolean).join(' / ') || '-'}
+                </td>
+                <td className="px-4 py-3 min-w-[6rem]">
+                  <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="badge-only" />
                 </td>
                 {showStock && (
                   <td className="px-4 py-3 text-right">{p.stock}</td>

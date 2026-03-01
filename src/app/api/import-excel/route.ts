@@ -258,17 +258,17 @@ export async function POST(req: NextRequest) {
       uniqueSkus.length > 0
         ? await supabase
             .from('products')
-            .select('id, sku, stock, cost_yen')
+            .select('id, sku, stock, cost_yen, oldest_received_at')
             .eq('user_id', user.id)
             .in('sku', uniqueSkus)
         : { data: [] };
 
     const skuToExisting = new Map<
       string,
-      { id: string; sku: string; stock: number; cost_yen: number }
+      { id: string; sku: string; stock: number; cost_yen: number; oldest_received_at: string | null }
     >();
     for (const p of existingProducts ?? []) {
-      if (p.sku) skuToExisting.set(p.sku, p);
+      if (p.sku) skuToExisting.set(p.sku, { ...p, oldest_received_at: p.oldest_received_at ?? null });
     }
 
     const toInsert: Record<string, unknown>[] = [];
@@ -300,6 +300,7 @@ export async function POST(req: NextRequest) {
 
       let costYen = m.costYen;
       let stock = m.stock;
+      let oldestReceivedAt: string | null = null;
       if (existing) {
         const exStock = Number(existing.stock) || 0;
         const exCost = Number(existing.cost_yen) || 0;
@@ -307,9 +308,19 @@ export async function POST(req: NextRequest) {
         const totalCostQty = exStock * exCost + stock * m.costYen;
         costYen = totalStock > 0 ? Math.round(totalCostQty / totalStock) : m.costYen;
         stock = totalStock;
+        if (exStock === 0) {
+          oldestReceivedAt = m.stockReceivedAt || new Date().toISOString().slice(0, 10);
+        } else {
+          // 追加入荷時は既存を維持。未設定（null）の既存データは今回の入荷日で初期化
+          oldestReceivedAt = existing.oldest_received_at ?? (m.stockReceivedAt || new Date().toISOString().slice(0, 10));
+        }
+      } else {
+        if (stock > 0) {
+          oldestReceivedAt = m.stockReceivedAt || new Date().toISOString().slice(0, 10);
+        }
       }
 
-      const rowData = {
+      const rowData: Record<string, unknown> = {
         name: m.name,
         cost_yen: costYen,
         stock: stock,
@@ -320,13 +331,20 @@ export async function POST(req: NextRequest) {
         ...(imageUrl && { image_url: imageUrl }),
         ...(m.stockReceivedAt && { stock_received_at: m.stockReceivedAt }),
       };
+      if (oldestReceivedAt !== null) {
+        rowData.oldest_received_at = oldestReceivedAt;
+      }
 
       if (existing) {
-        toUpdate.push({ id: existing.id, data: { ...rowData, updated_at: new Date().toISOString() } });
+        toUpdate.push({
+          id: existing.id,
+          data: { ...rowData, sku_locked: true, updated_at: new Date().toISOString() },
+        });
       } else {
         toInsert.push({
           user_id: user.id,
           sku: m.sku || null,
+          sku_locked: !!m.sku,
           ...rowData,
         });
       }

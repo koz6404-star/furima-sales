@@ -9,6 +9,8 @@ import { Nav } from '@/components/nav';
 export default function ProductEditPage() {
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
+  const [skuLocked, setSkuLocked] = useState(false);
+  const [customSku, setCustomSku] = useState('');
   const [campaign, setCampaign] = useState('');
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
@@ -41,7 +43,7 @@ export default function ProductEditPage() {
 
       const { data, error: fetchError } = await supabase
         .from('products')
-        .select('name, sku, campaign, size, color, memo, stock_received_at, default_shipping_yen')
+        .select('name, sku, sku_locked, custom_sku, campaign, size, color, memo, stock_received_at, default_shipping_yen')
         .eq('id', id)
         .eq('user_id', user.id)
         .single();
@@ -52,6 +54,8 @@ export default function ProductEditPage() {
       }
       setName(data.name);
       setSku(data.sku || '');
+      setSkuLocked(!!data.sku_locked);
+      setCustomSku(data.custom_sku || '');
       setCampaign(data.campaign || '');
       setSize(data.size || '');
       setColor(data.color || '');
@@ -72,19 +76,23 @@ export default function ProductEditPage() {
       setSaving(false);
       return;
     }
+    const updateData: Record<string, unknown> = {
+      name: name.trim(),
+      campaign: campaign.trim() || null,
+      size: size.trim() || null,
+      color: color.trim() || null,
+      memo: memo.trim() || null,
+      stock_received_at: stockReceivedAt.trim() || null,
+      default_shipping_yen: defaultShippingYen ? parseInt(defaultShippingYen, 10) : null,
+      custom_sku: customSku.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (!skuLocked) {
+      updateData.sku = sku.trim() || null;
+    }
     const { error: updateError } = await supabase
       .from('products')
-      .update({
-        name: name.trim(),
-        sku: sku.trim() || null,
-        campaign: campaign.trim() || null,
-        size: size.trim() || null,
-        color: color.trim() || null,
-        memo: memo.trim() || null,
-        stock_received_at: stockReceivedAt.trim() || null,
-        default_shipping_yen: defaultShippingYen ? parseInt(defaultShippingYen, 10) : null,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updateData)
       .eq('id', id)
       .eq('user_id', user.id);
     setSaving(false);
@@ -136,12 +144,28 @@ export default function ProductEditPage() {
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">SKU（任意）</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">SKU（取込由来は編集不可）</label>
             <input
               type="text"
               value={sku}
               onChange={(e) => setSku(e.target.value)}
+              readOnly={skuLocked}
+              className={`w-full rounded border px-3 py-2 ${skuLocked ? 'border-slate-200 bg-slate-50 text-slate-600 cursor-not-allowed' : 'border-slate-300'}`}
+              placeholder={skuLocked ? 'Excel取込のSKUは編集できません' : ''}
+            />
+            {skuLocked && (
+              <p className="text-xs text-slate-500 mt-1">荷重平均計算用のため、取込品のSKUは変更できません</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">管理番号（任意）</label>
+            <p className="text-xs text-slate-500 mb-1">ご自身の管理用に別の番号を付ける場合はこちらを使用</p>
+            <input
+              type="text"
+              value={customSku}
+              onChange={(e) => setCustomSku(e.target.value)}
               className="w-full rounded border border-slate-300 px-3 py-2"
+              placeholder="例: A-001"
             />
           </div>
           <div className="grid grid-cols-3 gap-4">

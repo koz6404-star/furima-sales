@@ -62,9 +62,14 @@ export function RestockForm({
       }
     }
 
+    const today = new Date().toISOString().slice(0, 10);
     const { error: updateErr } = await supabase
       .from('products')
-      .update({ stock: num, updated_at: new Date().toISOString() })
+      .update({
+        stock: num,
+        oldest_received_at: today,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', productId);
     setLoading(false);
     if (updateErr) {

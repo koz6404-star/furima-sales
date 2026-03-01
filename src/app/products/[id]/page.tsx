@@ -8,6 +8,7 @@ import { SaleForm } from './sale-form';
 import { RestockForm } from './restock-form';
 import { ProductDeleteButton } from '@/components/product-delete-button';
 import { DefaultShippingSelector } from './default-shipping-selector';
+import { StockAgeBadge } from '@/components/stock-age-badge';
 
 export default async function ProductDetailPage({
   params,
@@ -128,13 +129,33 @@ export default async function ProductDetailPage({
                   variant="icon"
                 />
               </div>
-              {product.campaign && (
-                <div className="mt-2">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-sm">
-                    企画: {product.campaign}
-                  </span>
-                </div>
-              )}
+              <div className="mt-2 flex flex-wrap gap-2 items-start">
+                <StockAgeBadge
+                  oldestReceivedAt={(product as { oldest_received_at?: string | null }).oldest_received_at}
+                  stockReceivedAt={product.stock_received_at}
+                  stock={product.stock}
+                  variant="full"
+                />
+                {(product.sku || (product as { custom_sku?: string | null }).custom_sku || product.campaign) && (
+                  <>
+                  {product.sku && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-sm">
+                      SKU: {product.sku}
+                    </span>
+                  )}
+                  {(product as { custom_sku?: string | null }).custom_sku && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-sm">
+                      管理番号: {(product as { custom_sku: string }).custom_sku}
+                    </span>
+                  )}
+                  {product.campaign && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-sm">
+                      企画: {product.campaign}
+                    </span>
+                  )}
+                </>
+                )}
+              </div>
               <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-slate-500">原価（税込）</span>
