@@ -88,7 +88,7 @@ export function ProductsTableWithActions({
   };
 
   const selectedProductObjects = products.filter((p) => selected.has(p.id));
-  const canCreateSet = allowSetCreation && selectedProductObjects.length >= 2;
+  const canCreateSet = allowSetCreation && selectedProductObjects.length >= 1;
 
   return (
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
@@ -96,7 +96,7 @@ export function ProductsTableWithActions({
         <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center gap-3 flex-wrap">
           <span className="text-sm font-medium">{selected.size}件選択中</span>
           {selected.size === 1 && allowSetCreation && (
-            <span className="text-sm text-amber-700">あと1件選択でセット出品できます</span>
+            <span className="text-sm text-amber-700">同一商品を2個セットなどでセット出品できます</span>
           )}
           {canCreateSet && (
             <button
