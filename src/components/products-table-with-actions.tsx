@@ -67,17 +67,19 @@ export function ProductsTableWithActions({
       return;
     }
     const ids = Array.from(selected);
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('user_id', user.id)
-      .in('id', ids);
+    let failed = 0;
+    for (const id of ids) {
+      const { error } = await supabase.rpc('delete_product_with_stock_restore', {
+        p_product_id: id,
+        p_user_id: user.id,
+      });
+      if (error) failed++;
+    }
     setBulkDeleting(false);
-    if (!error) {
-      setSelected(new Set());
-      router.refresh();
-    } else {
-      alert('削除に失敗しました: ' + error.message);
+    setSelected(new Set());
+    router.refresh();
+    if (failed > 0) {
+      alert(`${ids.length - failed}件削除しましたが、${failed}件は失敗しました。`);
     }
   };
 

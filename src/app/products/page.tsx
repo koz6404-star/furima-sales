@@ -11,7 +11,7 @@ const PER_PAGE = 20;
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; match?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -20,6 +20,7 @@ export default async function ProductsPage({
   const params = await searchParams;
   const q = (params.q ?? '').trim();
   const match = params.match === 'exact' ? 'exact' : 'partial';
+  const setOnly = params.setOnly === '1';
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
 
   let query = supabase
@@ -27,6 +28,18 @@ export default async function ProductsPage({
     .select('*', { count: 'exact' })
     .eq('user_id', user.id)
     .gt('stock', 0);
+
+  if (setOnly) {
+    const { data: setRows } = await supabase
+      .from('product_set_items')
+      .select('set_product_id');
+    const setIds = [...new Set((setRows ?? []).map((r) => r.set_product_id))];
+    if (setIds.length > 0) {
+      query = query.in('id', setIds);
+    } else {
+      query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+    }
+  }
 
   if (q) {
     if (match === 'exact') {
@@ -40,6 +53,11 @@ export default async function ProductsPage({
   const to = from + PER_PAGE - 1;
   const { data: products, count: totalCount } = await query.order('updated_at', { ascending: false }).range(from, to);
   const totalPages = totalCount ? Math.ceil(totalCount / PER_PAGE) : 1;
+  const queryStr = [
+    q ? `q=${encodeURIComponent(q)}` : '',
+    q ? `match=${match}` : '',
+    setOnly ? 'setOnly=1' : '',
+  ].filter(Boolean).join('&');
 
   return (
     <div className="min-h-screen">
@@ -50,8 +68,10 @@ export default async function ProductsPage({
             <h1 className="text-2xl font-bold">商品一覧（在庫あり）</h1>
             <p className="text-sm text-slate-600 mt-1">
               {q
-                ? `「${q}」の検索結果: ${totalCount ?? 0}件（${match === 'exact' ? '完全一致' : '部分一致'}）`
-                : `全${totalCount ?? 0}件、2件以上選択でセット出品が可能です`}
+                ? `「${q}」の検索結果: ${totalCount ?? 0}件（${match === 'exact' ? '完全一致' : '部分一致'}）${setOnly ? '・セット品のみ' : ''}`
+                : setOnly
+                  ? `セット品: ${totalCount ?? 0}件`
+                  : `全${totalCount ?? 0}件、2件以上選択でセット出品が可能です`}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
@@ -76,7 +96,7 @@ export default async function ProductsPage({
           <div className="mt-6 flex flex-wrap justify-center gap-2">
             {page > 1 && (
               <Link
-                href={`/products?page=${page - 1}${q ? `&q=${encodeURIComponent(q)}&match=${match}` : ''}`}
+                href={`/products?page=${page - 1}${queryStr ? `&${queryStr}` : ''}`}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 min-h-[44px] flex items-center"
               >
                 ← 前へ
@@ -87,7 +107,7 @@ export default async function ProductsPage({
             </span>
             {page < totalPages && (
               <Link
-                href={`/products?page=${page + 1}${q ? `&q=${encodeURIComponent(q)}&match=${match}` : ''}`}
+                href={`/products?page=${page + 1}${queryStr ? `&${queryStr}` : ''}`}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 min-h-[44px] flex items-center"
               >
                 次へ →

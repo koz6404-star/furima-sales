@@ -5,11 +5,22 @@ import { useCallback, useEffect, useState } from 'react';
 
 type MatchType = 'partial' | 'exact';
 
+function buildParams(trimmed: string, match: MatchType, setOnly: boolean): URLSearchParams {
+  const params = new URLSearchParams();
+  if (trimmed) {
+    params.set('q', trimmed);
+    params.set('match', match);
+  }
+  if (setOnly) params.set('setOnly', '1');
+  return params;
+}
+
 export function ProductSearchBar({ basePath }: { basePath: '/products' | '/products/sold-out' }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const q = searchParams.get('q') ?? '';
   const match = (searchParams.get('match') as MatchType) ?? 'partial';
+  const setOnly = searchParams.get('setOnly') === '1';
 
   const [inputValue, setInputValue] = useState(q);
   useEffect(() => setInputValue(q), [q]);
@@ -18,25 +29,22 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
     (e: React.FormEvent) => {
       e.preventDefault();
       const trimmed = inputValue.trim();
-      const params = new URLSearchParams();
-      if (trimmed) {
-        params.set('q', trimmed);
-        params.set('match', match);
-      }
+      const params = buildParams(trimmed, match, setOnly);
       const query = params.toString();
       router.push(query ? `${basePath}?${query}` : basePath);
     },
-    [inputValue, match, basePath, router]
+    [inputValue, match, setOnly, basePath, router]
   );
 
   const handleMatchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newMatch = e.target.value as MatchType;
-    const trimmed = inputValue.trim();
-    const params = new URLSearchParams();
-    if (trimmed) {
-      params.set('q', trimmed);
-      params.set('match', newMatch);
-    }
+    const params = buildParams(inputValue.trim(), newMatch, setOnly);
+    const query = params.toString();
+    router.push(query ? `${basePath}?${query}` : basePath);
+  };
+
+  const handleSetOnlyToggle = () => {
+    const params = buildParams(inputValue.trim(), match, !setOnly);
     const query = params.toString();
     router.push(query ? `${basePath}?${query}` : basePath);
   };
@@ -65,6 +73,15 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
         <option value="partial">部分一致</option>
         <option value="exact">完全一致</option>
       </select>
+      <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2.5 min-h-[44px] cursor-pointer hover:bg-slate-50">
+        <input
+          type="checkbox"
+          checked={setOnly}
+          onChange={handleSetOnlyToggle}
+          className="rounded border-slate-300"
+        />
+        <span className="text-sm whitespace-nowrap">セット品のみ</span>
+      </label>
       <div className="flex gap-2">
         <button
           type="submit"
@@ -72,7 +89,7 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
         >
           検索
         </button>
-        {(q || inputValue) && (
+        {(q || inputValue || setOnly) && (
           <button
             type="button"
             onClick={handleClear}

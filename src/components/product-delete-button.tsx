@@ -31,15 +31,16 @@ export function ProductDeleteButton({
       setLoading(false);
       return;
     }
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', productId)
-      .eq('user_id', user.id);
+    const { error } = await supabase.rpc('delete_product_with_stock_restore', {
+      p_product_id: productId,
+      p_user_id: user.id,
+    });
     setLoading(false);
     if (!error) {
       router.push(redirectTo);
       router.refresh();
+    } else {
+      alert('削除に失敗しました: ' + error.message);
     }
   };
 

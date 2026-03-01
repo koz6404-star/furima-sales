@@ -98,6 +98,42 @@ CREATE POLICY "product_set_items_all" ON product_set_items FOR ALL TO authentica
   WITH CHECK (EXISTS (SELECT 1 FROM products p WHERE p.id = set_product_id AND p.user_id = auth.uid()));
 ```
 
+### セット削除時の在庫復元を行う場合
+
+セット出品した商品を削除した際に、構成単品の在庫を自動で元に戻すには、SQL Editor で以下を実行してください:
+
+```sql
+-- supabase/migrations/007_delete_product_with_stock_restore.sql の内容
+CREATE OR REPLACE FUNCTION delete_product_with_stock_restore(p_product_id UUID, p_user_id UUID)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_stock INT;
+  r RECORD;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM products WHERE id = p_product_id AND user_id = p_user_id) THEN
+    RAISE EXCEPTION 'Product not found or access denied';
+  END IF;
+  SELECT stock INTO v_stock FROM products WHERE id = p_product_id;
+  FOR r IN
+    SELECT component_product_id, quantity_per_set
+    FROM product_set_items
+    WHERE set_product_id = p_product_id
+  LOOP
+    UPDATE products
+    SET stock = stock + (v_stock * r.quantity_per_set),
+        updated_at = NOW()
+    WHERE id = r.component_product_id AND user_id = p_user_id;
+  END LOOP;
+  DELETE FROM products WHERE id = p_product_id AND user_id = p_user_id;
+END;
+$$;
+GRANT EXECUTE ON FUNCTION delete_product_with_stock_restore(UUID, UUID) TO authenticated;
+```
+
 ---
 
 ## 方法B: スクリプトで実行（接続文字列が必要）
