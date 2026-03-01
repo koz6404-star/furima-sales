@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from './auth-provider';
+import { MascotQA } from '@/components/mascot-qa';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -38,7 +39,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-slate-50 text-slate-900`}
       >
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          <MascotQA />
+        </AuthProvider>
       </body>
     </html>
   );

@@ -104,18 +104,6 @@ export default async function DashboardPage({
 
   return (
     <div className="min-h-screen">
-      <div
-        className="fixed bottom-6 right-6 w-[60px] md:w-[100px] z-[100] pointer-events-none"
-        aria-hidden
-      >
-        <img
-          src="/shiba-dashboard.png"
-          alt="マスコット"
-          width={100}
-          height={100}
-          className="w-full h-auto object-contain drop-shadow-sm"
-        />
-      </div>
       <Nav />
       <main className="container mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-4">ダッシュボード</h1>
