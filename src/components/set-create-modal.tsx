@@ -68,6 +68,7 @@ export function SetCreateModal({
       setLoading(false);
       return;
     }
+    await supabase.from('product_location_stock').insert({ product_id: newProduct.id, location: 'home', quantity: initialStock });
 
     const setItems = selectedProducts.map((p) => ({
       set_product_id: newProduct.id,
@@ -82,15 +83,25 @@ export function SetCreateModal({
       return;
     }
 
+    const { deductLocationStock } = await import('@/lib/location-stock');
     for (const p of selectedProducts) {
+      const deduct = initialStock;
+      const { data: locRows } = await supabase.from('product_location_stock').select('location, quantity').eq('product_id', p.id);
+      const homeQ = locRows?.find((r: { location: string }) => r.location === 'home')?.quantity ?? 0;
+      const whQ = locRows?.find((r: { location: string }) => r.location === 'warehouse')?.quantity ?? 0;
+      const { newHome, newWarehouse } = deductLocationStock(homeQ, whQ, deduct);
+      const now = new Date().toISOString();
+      const upsertLoc = async (loc: string, qty: number) => {
+        const { data: ex } = await supabase.from('product_location_stock').select('quantity').eq('product_id', p.id).eq('location', loc).single();
+        if (ex) await supabase.from('product_location_stock').update({ quantity: qty, updated_at: now }).eq('product_id', p.id).eq('location', loc);
+        else if (qty > 0) await supabase.from('product_location_stock').insert({ product_id: p.id, location: loc, quantity: qty });
+      };
+      await upsertLoc('home', newHome);
+      await upsertLoc('warehouse', newWarehouse);
       const newStock = p.stock - initialStock;
       const { error: updateErr } = await supabase
         .from('products')
-        .update({
-          stock: newStock,
-          ...(newStock === 0 && { oldest_received_at: null }),
-          updated_at: new Date().toISOString(),
-        })
+        .update({ stock: newStock, ...(newStock === 0 && { oldest_received_at: null }), updated_at: now })
         .eq('id', p.id)
         .eq('user_id', user.id);
       if (updateErr) {

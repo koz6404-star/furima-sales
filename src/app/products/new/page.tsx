@@ -74,7 +74,7 @@ export default function NewProductPage() {
       const { data: urlData } = supabase.storage.from('product-images').getPublicUrl(path);
       imageUrl = urlData.publicUrl;
     }
-    const { error } = await supabase.from('products').insert({
+    const { data: newProduct, error } = await supabase.from('products').insert({
       user_id: user.id,
       name,
       sku: sku || null,
@@ -91,11 +91,14 @@ export default function NewProductPage() {
       ...(stockNum > 0 && {
         oldest_received_at: stockReceivedAt.trim() || new Date().toISOString().slice(0, 10),
       }),
-    });
+    }).select('id').single();
     setLoading(false);
     if (error) {
       setError(error.message);
       return;
+    }
+    if (newProduct && stockNum > 0) {
+      await supabase.from('product_location_stock').insert({ product_id: newProduct.id, location: 'home', quantity: stockNum });
     }
     router.push('/products');
     router.refresh();

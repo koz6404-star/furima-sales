@@ -353,23 +353,55 @@ export async function POST(req: NextRequest) {
     if (toInsert.length > 0) {
       for (let i = 0; i < toInsert.length; i += DB_BATCH_SIZE) {
         const batch = toInsert.slice(i, i + DB_BATCH_SIZE);
-        const { error } = await supabase.from('products').insert(batch);
+        const { data: inserted, error } = await supabase.from('products').insert(batch).select('id');
         if (error) {
           errors.push(`一括登録エラー: ${error.message}`);
-        } else {
-          created += batch.length;
+        } else if (inserted) {
+          created += inserted.length;
+          for (let j = 0; j < inserted.length; j++) {
+            const stock = Number(batch[j]?.stock) || 0;
+            if (stock > 0) {
+              await supabase.from('product_location_stock').insert({ product_id: inserted[j].id, location: 'home', quantity: stock });
+            }
+          }
         }
       }
     }
 
     for (let i = 0; i < toUpdate.length; i += DB_BATCH_SIZE) {
       const batch = toUpdate.slice(i, i + DB_BATCH_SIZE);
-      const results = await Promise.all(
-        batch.map(({ id, data }) =>
-          supabase.from('products').update(data).eq('id', id)
-        )
-      );
-      updated += results.filter((r) => !r.error).length;
+      for (const { id, data } of batch) {
+        const { error } = await supabase.from('products').update(data).eq('id', id);
+        if (!error) updated += 1;
+        const stock = Number(data.stock) || 0;
+        if (stock > 0) {
+          const { data: locRows } = await supabase.from('product_location_stock').select('location, quantity').eq('product_id', id);
+          const homeQ = locRows?.find((r: { location: string }) => r.location === 'home')?.quantity ?? 0;
+          const whQ = locRows?.find((r: { location: string }) => r.location === 'warehouse')?.quantity ?? 0;
+          const prevTotal = homeQ + whQ;
+          const newTotal = stock;
+          const diff = newTotal - prevTotal;
+          if (diff > 0) {
+            const newHome = homeQ + diff;
+            if (homeQ > 0) {
+              await supabase.from('product_location_stock').update({ quantity: newHome, updated_at: new Date().toISOString() }).eq('product_id', id).eq('location', 'home');
+            } else {
+              await supabase.from('product_location_stock').insert({ product_id: id, location: 'home', quantity: diff });
+            }
+          } else if (diff < 0) {
+            const { deductLocationStock } = await import('@/lib/location-stock');
+            const { newHome, newWarehouse } = deductLocationStock(homeQ, whQ, -diff);
+            const now = new Date().toISOString();
+            const upsert = async (loc: string, qty: number) => {
+              const ex = await supabase.from('product_location_stock').select('quantity').eq('product_id', id).eq('location', loc).single();
+              if (ex.data) await supabase.from('product_location_stock').update({ quantity: qty, updated_at: now }).eq('product_id', id).eq('location', loc);
+              else if (qty > 0) await supabase.from('product_location_stock').insert({ product_id: id, location: loc, quantity: qty });
+            };
+            await upsert('home', newHome);
+            await upsert('warehouse', newWarehouse);
+          }
+        }
+      }
     }
 
     const imageCount = Object.keys(imageUrlsByIndex).length;

@@ -13,6 +13,8 @@ type Setting = { platform: string; fee_rate_id: string | null; rounding: string;
 export function SaleForm({
   productId,
   currentStock,
+  stockAtHome = 0,
+  stockAtWarehouse = 0,
   costYen,
   feeRates,
   shippingRates,
@@ -20,6 +22,8 @@ export function SaleForm({
 }: {
   productId: string;
   currentStock: number;
+  stockAtHome?: number;
+  stockAtWarehouse?: number;
   costYen: number;
   feeRates: FeeRate[];
   shippingRates: ShippingRate[];
@@ -103,12 +107,32 @@ export function SaleForm({
       return;
     }
     const newStock = currentStock - quantity;
+    const { deductLocationStock } = await import('@/lib/location-stock');
+    const { newHome, newWarehouse } = deductLocationStock(stockAtHome, stockAtWarehouse, quantity);
+    const now = new Date().toISOString();
+
+    const upsertLoc = async (loc: 'home' | 'warehouse', qty: number) => {
+      const { data: ex } = await supabase
+        .from('product_location_stock')
+        .select('quantity')
+        .eq('product_id', productId)
+        .eq('location', loc)
+        .single();
+      if (ex) {
+        await supabase.from('product_location_stock').update({ quantity: qty, updated_at: now }).eq('product_id', productId).eq('location', loc);
+      } else if (qty > 0) {
+        await supabase.from('product_location_stock').insert({ product_id: productId, location: loc, quantity: qty });
+      }
+    };
+    await upsertLoc('home', newHome);
+    await upsertLoc('warehouse', newWarehouse);
+
     const { error: updateError } = await supabase
       .from('products')
       .update({
         stock: newStock,
         ...(newStock === 0 && { oldest_received_at: null }),
-        updated_at: new Date().toISOString(),
+        updated_at: now,
       })
       .eq('id', productId);
     if (updateError) {

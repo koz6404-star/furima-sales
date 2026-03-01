@@ -6,6 +6,7 @@ import { Nav } from '@/components/nav';
 import { calcTargetPriceForMargin, calcFee } from '@/lib/calculations';
 import { SaleForm } from './sale-form';
 import { RestockForm } from './restock-form';
+import { LocationTransferForm } from './location-transfer-form';
 import { ProductDeleteButton } from '@/components/product-delete-button';
 import { DefaultShippingSelector } from './default-shipping-selector';
 import { StockAgeBadge } from '@/components/stock-age-badge';
@@ -27,6 +28,13 @@ export default async function ProductDetailPage({
     .eq('user_id', user.id)
     .single();
   if (!product) notFound();
+
+  const { data: locationStock } = await supabase
+    .from('product_location_stock')
+    .select('location, quantity')
+    .eq('product_id', id);
+  const stockAtHome = locationStock?.find((r) => r.location === 'home')?.quantity ?? 0;
+  const stockAtWarehouse = locationStock?.find((r) => r.location === 'warehouse')?.quantity ?? 0;
 
   const { data: sales } = await supabase
     .from('sales')
@@ -161,6 +169,7 @@ export default async function ProductDetailPage({
                 <div>
                   <span className="text-slate-500">在庫数</span>
                   <p className="font-semibold">{product.stock}</p>
+                  <p className="text-slate-600 text-xs mt-0.5">家: {stockAtHome} / 倉庫: {stockAtWarehouse}</p>
                 </div>
                 {product.stock_received_at && (
                   <div>
@@ -204,17 +213,29 @@ export default async function ProductDetailPage({
         </div>
 
         {product.stock > 0 && (
-          <div className="rounded-lg border border-slate-200 bg-white p-6 mb-6">
-            <h2 className="font-bold text-lg mb-4">販売登録</h2>
-            <SaleForm
-              productId={product.id}
-              currentStock={product.stock}
-              costYen={product.cost_yen}
-              feeRates={feeRates || []}
-              shippingRates={shippingRates || []}
-              settings={settings || []}
-            />
-          </div>
+          <>
+            <div className="rounded-lg border border-slate-200 bg-white p-6 mb-6">
+              <h2 className="font-bold text-lg mb-4">保管場所の移動</h2>
+              <LocationTransferForm
+                productId={product.id}
+                stockAtHome={stockAtHome}
+                stockAtWarehouse={stockAtWarehouse}
+              />
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-white p-6 mb-6">
+              <h2 className="font-bold text-lg mb-4">販売登録</h2>
+              <SaleForm
+                productId={product.id}
+                currentStock={product.stock}
+                stockAtHome={stockAtHome}
+                stockAtWarehouse={stockAtWarehouse}
+                costYen={product.cost_yen}
+                feeRates={feeRates || []}
+                shippingRates={shippingRates || []}
+                settings={settings || []}
+              />
+            </div>
+          </>
         )}
 
         {product.stock === 0 && (

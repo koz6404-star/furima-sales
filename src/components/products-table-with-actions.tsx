@@ -27,11 +27,13 @@ type Product = {
 
 export function ProductsTableWithActions({
   products,
+  locationStockMap = {},
   showStock = true,
   redirectAfterDelete = '/products',
   allowSetCreation = false,
 }: {
   products: Product[];
+  locationStockMap?: Record<string, { home: number; warehouse: number }>;
   showStock?: boolean;
   redirectAfterDelete?: '/products' | '/products/sold-out';
   allowSetCreation?: boolean;
@@ -176,7 +178,13 @@ export function ProductsTableWithActions({
                     </p>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-sm text-slate-600 items-center">
                       <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="badge-only" />
-                      {showStock && <span>在庫: {p.stock}</span>}
+                      {showStock && (
+                        <>
+                          <span>家: {locationStockMap[p.id]?.home ?? '-'}</span>
+                          <span>倉庫: {locationStockMap[p.id]?.warehouse ?? '-'}</span>
+                          <span>在庫: {p.stock}</span>
+                        </>
+                      )}
                       <span>{p.stock_received_at ? String(p.stock_received_at).slice(0, 10) : '-'}</span>
                       <span>¥{p.cost_yen.toLocaleString()}</span>
                       {showStock && (
@@ -230,7 +238,11 @@ export function ProductsTableWithActions({
             <th className="px-4 py-3 text-left text-sm font-semibold">企画/サイズ/色</th>
             <th className="px-4 py-3 text-left text-sm font-semibold">状態</th>
             {showStock && (
-              <th className="px-4 py-3 text-right text-sm font-semibold">在庫</th>
+              <>
+                <th className="px-4 py-3 text-right text-sm font-semibold">家</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold">倉庫</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold">在庫</th>
+              </>
             )}
             <th className="px-4 py-3 text-right text-sm font-semibold">入荷日</th>
             <th className="px-4 py-3 text-right text-sm font-semibold">原価</th>
@@ -247,7 +259,7 @@ export function ProductsTableWithActions({
           {(!products || products.length === 0) && (
             <tr>
               <td
-                colSpan={showStock ? 11 : 8}
+                colSpan={showStock ? 13 : 8}
                 className="px-4 py-8 text-center text-slate-500"
               >
                 {showStock ? '在庫ありの商品がありません' : '完売商品がありません'}
@@ -298,7 +310,11 @@ export function ProductsTableWithActions({
                   <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="badge-only" />
                 </td>
                 {showStock && (
-                  <td className="px-4 py-3 text-right">{p.stock}</td>
+                  <>
+                    <td className="px-4 py-3 text-right text-slate-600">{locationStockMap[p.id]?.home ?? '-'}</td>
+                    <td className="px-4 py-3 text-right text-slate-600">{locationStockMap[p.id]?.warehouse ?? '-'}</td>
+                    <td className="px-4 py-3 text-right">{p.stock}</td>
+                  </>
                 )}
                 <td className="px-4 py-3 text-right text-slate-600">
                   {p.stock_received_at ? String(p.stock_received_at).slice(0, 10) : '-'}

@@ -11,7 +11,7 @@ const PER_PAGE = 20;
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string }>;
+  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string; location?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -21,13 +21,40 @@ export default async function ProductsPage({
   const q = (params.q ?? '').trim();
   const match = params.match === 'exact' ? 'exact' : 'partial';
   const setOnly = params.setOnly === '1';
+  const locationFilter = params.location === 'home' || params.location === 'warehouse' || params.location === 'both' ? params.location : '';
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
+
+  let productIdsFromLocation: string[] | null = null;
+  if (locationFilter) {
+    if (locationFilter === 'both') {
+      const { data: homeRows } = await supabase.from('product_location_stock').select('product_id').eq('location', 'home').gt('quantity', 0);
+      const { data: whRows } = await supabase.from('product_location_stock').select('product_id').eq('location', 'warehouse').gt('quantity', 0);
+      const homeIds = new Set((homeRows ?? []).map((r) => r.product_id));
+      const whIds = new Set((whRows ?? []).map((r) => r.product_id));
+      productIdsFromLocation = [...homeIds].filter((id) => whIds.has(id));
+    } else {
+      const { data: locRows } = await supabase
+        .from('product_location_stock')
+        .select('product_id')
+        .eq('location', locationFilter)
+        .gt('quantity', 0);
+      productIdsFromLocation = [...new Set((locRows ?? []).map((r) => r.product_id))];
+    }
+  }
 
   let query = supabase
     .from('products')
     .select('*', { count: 'exact' })
     .eq('user_id', user.id)
     .gt('stock', 0);
+
+  if (productIdsFromLocation !== null) {
+    if (productIdsFromLocation.length === 0) {
+      query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+    } else {
+      query = query.in('id', productIdsFromLocation);
+    }
+  }
 
   if (setOnly) {
     const { data: setRows } = await supabase
@@ -52,11 +79,26 @@ export default async function ProductsPage({
   const from = (page - 1) * PER_PAGE;
   const to = from + PER_PAGE - 1;
   const { data: products, count: totalCount } = await query.order('updated_at', { ascending: false }).range(from, to);
+  const productIds = (products ?? []).map((p) => p.id);
+  const locationStockMap: Record<string, { home: number; warehouse: number }> = {};
+  if (productIds.length > 0) {
+    const { data: locRows } = await supabase.from('product_location_stock').select('product_id, location, quantity').in('product_id', productIds);
+    for (const p of products ?? []) {
+      locationStockMap[p.id] = { home: 0, warehouse: 0 };
+    }
+    for (const r of locRows ?? []) {
+      if (locationStockMap[r.product_id]) {
+        if (r.location === 'home') locationStockMap[r.product_id].home = r.quantity ?? 0;
+        else if (r.location === 'warehouse') locationStockMap[r.product_id].warehouse = r.quantity ?? 0;
+      }
+    }
+  }
   const totalPages = totalCount ? Math.ceil(totalCount / PER_PAGE) : 1;
   const queryStr = [
     q ? `q=${encodeURIComponent(q)}` : '',
     q ? `match=${match}` : '',
     setOnly ? 'setOnly=1' : '',
+    locationFilter ? `location=${locationFilter}` : '',
   ].filter(Boolean).join('&');
 
   return (
@@ -88,6 +130,7 @@ export default async function ProductsPage({
         </div>
         <ProductsTableWithActions
           products={products || []}
+          locationStockMap={locationStockMap}
           showStock={true}
           redirectAfterDelete="/products"
           allowSetCreation={true}
