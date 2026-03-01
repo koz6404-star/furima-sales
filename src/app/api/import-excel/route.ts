@@ -61,18 +61,19 @@ export async function POST(req: NextRequest) {
 
     const fileHash = createHash('sha256').update(buf).digest('hex');
     if (!forceImport) {
-      const { data: existing } = await supabase
+      const { data: existing, error: dupErr } = await supabase
         .from('imported_excel_files')
         .select('file_hash')
         .eq('user_id', user.id)
         .eq('file_hash', fileHash)
-        .single();
-      if (existing) {
+        .maybeSingle();
+      if (!dupErr && existing) {
         return NextResponse.json({
           alreadyImported: true,
           message: 'このファイルは過去に取り込み済みです。再度取り込むと在庫などが更新されます。続行しますか？',
         });
       }
+      // dupErr 時（テーブル未作成など）は重複チェックをスキップして取り込み継続
     }
 
     const rows: Record<string, unknown>[] = [];
@@ -430,10 +431,11 @@ export async function POST(req: NextRequest) {
       if (zipPath) await supabase.storage.from('product-images').remove([zipPath]);
     }
 
-    await supabase.from('imported_excel_files').upsert(
+    const { error: upsertErr } = await supabase.from('imported_excel_files').upsert(
       { user_id: user.id, file_hash: fileHash, file_name: fileName, imported_at: new Date().toISOString() },
       { onConflict: 'user_id,file_hash' }
     );
+    // upsertErr 時（テーブル未作成など）は無視して取り込み成功を返す
 
     return NextResponse.json({
       created,
@@ -442,9 +444,10 @@ export async function POST(req: NextRequest) {
       imageCount: fileName.toLowerCase().endsWith('.xlsx') ? imageCount : undefined,
     });
   } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
     console.error('Import API error:', e);
     return NextResponse.json(
-      { error: String(e instanceof Error ? e.message : e) },
+      { error: `取り込みに失敗しました: ${msg}` },
       { status: 500 }
     );
   }

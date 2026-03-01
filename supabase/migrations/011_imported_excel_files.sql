@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS imported_excel_files (
   PRIMARY KEY (user_id, file_hash)
 );
 
-CREATE INDEX idx_imported_excel_files_user ON imported_excel_files(user_id);
+CREATE INDEX IF NOT EXISTS idx_imported_excel_files_user ON imported_excel_files(user_id);
 
 ALTER TABLE imported_excel_files ENABLE ROW LEVEL SECURITY;
 
