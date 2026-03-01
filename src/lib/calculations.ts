@@ -47,6 +47,7 @@ export function calcPriceWithMargin30(costYen: number): number {
  * 粗利 = 販売価格 - 手数料 - 送料 - 資材代 - 原価 = 原価 × (marginPercent/100)
  * P × (1 - feeRate/100) - shippingYen - materialYen - costYen = costYen × marginPercent/100
  * P = (costYen × (1 + marginPercent/100) + shippingYen + materialYen) / (1 - feeRate/100)
+ * marginPercent=0 のとき損益分岐価格（トントン）
  */
 export function calcTargetPriceForMargin(
   costYen: number,

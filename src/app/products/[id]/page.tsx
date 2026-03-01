@@ -73,12 +73,9 @@ export default async function ProductDetailPage({
   const defaultShippingYen = product.default_shipping_yen ?? nekoPos?.base_fee_yen ?? 210;
   const defaultMaterialYen = 0;
   const feeRatePercent = 10;
+  const price0 = calcTargetPriceForMargin(product.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 0);
   const price20 = calcTargetPriceForMargin(product.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 20);
   const price30 = calcTargetPriceForMargin(product.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 30);
-  const fee20 = calcFee(price20, feeRatePercent, 'floor');
-  const fee30 = calcFee(price30, feeRatePercent, 'floor');
-  const gross20 = price20 - fee20 - defaultShippingYen - defaultMaterialYen - product.cost_yen;
-  const gross30 = price30 - fee30 - defaultShippingYen - defaultMaterialYen - product.cost_yen;
 
   const defaultMercariFee = feeRates?.find((f) => f.platform === 'mercari' && f.rate_percent === 10);
   const defaultRakumaFees = feeRates?.filter((f) => f.platform === 'rakuma') || [];
@@ -172,14 +169,16 @@ export default async function ProductDetailPage({
                   </div>
                 )}
                 <div>
+                  <span className="text-slate-500">損益分岐価格</span>
+                  <p className="font-semibold">¥{price0.toLocaleString()}</p>
+                </div>
+                <div>
                   <span className="text-slate-500">利益20%目安価格</span>
                   <p className="font-semibold">¥{price20.toLocaleString()}</p>
-                  <p className="text-slate-600 text-xs mt-0.5">原価¥{product.cost_yen.toLocaleString()} / 送料¥{defaultShippingYen.toLocaleString()} / 手数料¥{fee20.toLocaleString()} / 資材代¥{defaultMaterialYen.toLocaleString()} → 粗利¥{gross20.toLocaleString()}</p>
                 </div>
                 <div>
                   <span className="text-slate-500">利益30%目安価格</span>
                   <p className="font-semibold">¥{price30.toLocaleString()}</p>
-                  <p className="text-slate-600 text-xs mt-0.5">原価¥{product.cost_yen.toLocaleString()} / 送料¥{defaultShippingYen.toLocaleString()} / 手数料¥{fee30.toLocaleString()} / 資材代¥{defaultMaterialYen.toLocaleString()} → 粗利¥{gross30.toLocaleString()}</p>
                 </div>
               </div>
               <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
