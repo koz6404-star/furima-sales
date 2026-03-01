@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
-import { calcTargetPriceForMargin, calcFee } from '@/lib/calculations';
+import { calcTargetPriceForMargin } from '@/lib/calculations';
 import { ProductDeleteButton } from './product-delete-button';
 import { SetCreateModal } from './set-create-modal';
 
@@ -87,7 +87,7 @@ export function ProductsTableWithActions({
   return (
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
       {selected.size > 0 && (
-        <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center gap-4 flex-wrap">
+        <div className="px-4 py-3 bg-amber-50 border-b border-amber-200 flex items-center gap-3 flex-wrap">
           <span className="text-sm font-medium">{selected.size}件選択中</span>
           {selected.size === 1 && allowSetCreation && (
             <span className="text-sm text-amber-700">あと1件選択でセット出品できます</span>
@@ -96,7 +96,7 @@ export function ProductsTableWithActions({
             <button
               type="button"
               onClick={() => setShowSetModal(true)}
-              className="rounded px-3 py-1 bg-emerald-600 text-white text-sm hover:bg-emerald-700"
+              className="rounded px-4 py-2.5 bg-emerald-600 text-white text-sm min-h-[44px] touch-manipulation hover:bg-emerald-700"
             >
               セット出品
             </button>
@@ -105,14 +105,14 @@ export function ProductsTableWithActions({
             type="button"
             onClick={bulkDelete}
             disabled={bulkDeleting}
-            className="rounded px-3 py-1 bg-red-600 text-white text-sm hover:bg-red-700 disabled:opacity-50"
+            className="rounded px-4 py-2.5 bg-red-600 text-white text-sm min-h-[44px] touch-manipulation hover:bg-red-700 disabled:opacity-50"
           >
             {bulkDeleting ? '削除中...' : '一括削除'}
           </button>
           <button
             type="button"
             onClick={() => setSelected(new Set())}
-            className="text-slate-600 text-sm hover:underline"
+            className="text-slate-600 text-sm min-h-[44px] touch-manipulation flex items-center hover:underline"
           >
             選択解除
           </button>
@@ -129,7 +129,82 @@ export function ProductsTableWithActions({
           }}
         />
       )}
-      <div className="overflow-x-auto">
+      {/* スマホ・タブレット: カードレイアウト */}
+      <div className="md:hidden divide-y divide-slate-200">
+        {(!products || products.length === 0) && (
+          <div className="px-4 py-8 text-center text-slate-500">
+            {showStock ? '在庫ありの商品がありません' : '完売商品がありません'}
+          </div>
+        )}
+        {products?.map((p) => {
+          const hasDefaultShipping = p.default_shipping_yen != null;
+          const defaultShippingYen = p.default_shipping_yen ?? 210;
+          const defaultMaterialYen = 0;
+          const feeRatePercent = 10;
+          const price20 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 20) : 0;
+          const price30 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 30) : 0;
+          return (
+            <div
+              key={p.id}
+              className="flex gap-3 p-4 items-start touch-manipulation active:bg-slate-50"
+            >
+              <label className="flex-shrink-0 pt-1 cursor-pointer select-none min-w-[44px] min-h-[44px] flex items-center justify-center">
+                <input
+                  type="checkbox"
+                  checked={selected.has(p.id)}
+                  onChange={() => toggle(p.id)}
+                  className="rounded border-2 border-slate-400 w-5 h-5 accent-emerald-600"
+                />
+              </label>
+              <div className="flex-1 min-w-0">
+                <div className="flex gap-3">
+                  {p.image_url ? (
+                    <div className="relative h-16 w-16 flex-shrink-0 rounded overflow-hidden">
+                      <Image src={p.image_url} alt={p.name} fill className="object-cover" />
+                    </div>
+                  ) : (
+                    <div className="h-16 w-16 flex-shrink-0 bg-slate-200 rounded flex items-center justify-center text-slate-400 text-xs">画像なし</div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-900 line-clamp-2">{p.name}</p>
+                    <p className="text-sm text-slate-500 mt-0.5">
+                      {[p.campaign, p.size, p.color].filter(Boolean).join(' / ') || '-'}
+                    </p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-sm text-slate-600">
+                      {showStock && <span>在庫: {p.stock}</span>}
+                      <span>{p.stock_received_at ? String(p.stock_received_at).slice(0, 10) : '-'}</span>
+                      <span>¥{p.cost_yen.toLocaleString()}</span>
+                      {showStock && (
+                        <>
+                          <span className={!hasDefaultShipping ? 'text-slate-400' : ''}>{hasDefaultShipping ? `20%: ¥${price20.toLocaleString()}` : '—'}</span>
+                          <span className={!hasDefaultShipping ? 'text-slate-400' : ''}>{hasDefaultShipping ? `30%: ¥${price30.toLocaleString()}` : '—'}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <Link
+                    href={`/products/${p.id}`}
+                    className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] flex-1 touch-manipulation"
+                  >
+                    詳細
+                  </Link>
+                  <ProductDeleteButton
+                    productId={p.id}
+                    productName={p.name}
+                    redirectTo={redirectAfterDelete}
+                    variant="icon"
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* デスクトップ: テーブルレイアウト */}
+      <div className="hidden md:block overflow-x-auto">
       <table className="w-full min-w-[640px]">
         <thead className="bg-slate-50">
           <tr>
@@ -157,7 +232,6 @@ export function ProductsTableWithActions({
               <>
                 <th className="px-4 py-3 text-right text-sm font-semibold">20%価格</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold">30%価格</th>
-                <th className="px-4 py-3 text-right text-sm font-semibold">想定粗利(20%)</th>
               </>
             )}
             <th className="px-4 py-3"></th>
@@ -167,7 +241,7 @@ export function ProductsTableWithActions({
           {(!products || products.length === 0) && (
             <tr>
               <td
-                colSpan={showStock ? 11 : 7}
+                colSpan={showStock ? 10 : 7}
                 className="px-4 py-8 text-center text-slate-500"
               >
                 {showStock ? '在庫ありの商品がありません' : '完売商品がありません'}
@@ -181,8 +255,6 @@ export function ProductsTableWithActions({
             const feeRatePercent = 10;
             const price20 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 20) : 0;
             const price30 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 30) : 0;
-            const fee20 = hasDefaultShipping ? calcFee(price20, feeRatePercent, 'floor') : 0;
-            const gross20 = hasDefaultShipping ? price20 - fee20 - defaultShippingYen - defaultMaterialYen - p.cost_yen : 0;
             return (
               <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-3 w-14 min-w-[3.5rem] text-center bg-emerald-50/50 border-r border-emerald-100/50 align-middle p-0">
@@ -227,7 +299,6 @@ export function ProductsTableWithActions({
                   <>
                     <td className={`px-4 py-3 text-right ${!hasDefaultShipping ? 'text-slate-400' : ''}`}>{hasDefaultShipping ? `¥${price20.toLocaleString()}` : '—'}</td>
                     <td className={`px-4 py-3 text-right ${!hasDefaultShipping ? 'text-slate-400' : ''}`}>{hasDefaultShipping ? `¥${price30.toLocaleString()}` : '—'}</td>
-                    <td className={`px-4 py-3 text-right ${!hasDefaultShipping ? 'text-slate-400' : ''}`}>{hasDefaultShipping ? `¥${gross20.toLocaleString()}` : '—'}</td>
                   </>
                 )}
                 <td className="px-3 sm:px-4 py-3 flex gap-2 items-center">

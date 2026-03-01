@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buf as unknown as ArrayBuffer);
       const ws = wb.worksheets[0];
-      const xlsxWb = XLSX.read(buf, { type: 'buffer' });
+      const xlsxWb = XLSX.read(buf, { type: 'buffer', cellDates: true });
       const xlsxWs = xlsxWb.Sheets[xlsxWb.SheetNames[0]];
       const sheetRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(xlsxWs, skipFirstRow ? { range: 1 } : {});
       rows.push(...sheetRows);
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
         }
       });
     } else {
-      const xlsxWb = XLSX.read(buf, { type: 'buffer' });
+      const xlsxWb = XLSX.read(buf, { type: 'buffer', cellDates: true });
       const xlsxWs = xlsxWb.Sheets[xlsxWb.SheetNames[0]];
       const sheetRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(xlsxWs, skipFirstRow ? { range: 1 } : {});
       rows.push(...sheetRows);

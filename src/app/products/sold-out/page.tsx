@@ -1,14 +1,17 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import Link from 'next/link';
 import { Suspense } from 'react';
 import { Nav } from '@/components/nav';
 import { ProductSearchBar } from '@/components/product-search-bar';
 import { ProductsTableWithActions } from '@/components/products-table-with-actions';
 
+const PER_PAGE = 20;
+
 export default async function SoldOutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; match?: string }>;
+  searchParams: Promise<{ q?: string; match?: string; page?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -17,10 +20,11 @@ export default async function SoldOutPage({
   const params = await searchParams;
   const q = (params.q ?? '').trim();
   const match = params.match === 'exact' ? 'exact' : 'partial';
+  const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
 
   let query = supabase
     .from('products')
-    .select('*')
+    .select('*', { count: 'exact' })
     .eq('user_id', user.id)
     .eq('stock', 0);
 
@@ -32,17 +36,22 @@ export default async function SoldOutPage({
     }
   }
 
-  const { data: products } = await query.order('updated_at', { ascending: false });
+  const from = (page - 1) * PER_PAGE;
+  const to = from + PER_PAGE - 1;
+  const { data: products, count: totalCount } = await query.order('updated_at', { ascending: false }).range(from, to);
+  const totalPages = totalCount ? Math.ceil(totalCount / PER_PAGE) : 1;
 
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:justify-between sm:items-center gap-4 mb-6">
           <div>
             <h1 className="text-2xl font-bold">完売一覧</h1>
             <p className="text-sm text-slate-600 mt-1">
-              {q ? `「${q}」の検索結果: ${products?.length ?? 0}件（${match === 'exact' ? '完全一致' : '部分一致'}）` : '2件以上選択でセット出品が可能です'}
+              {q
+                ? `「${q}」の検索結果: ${totalCount ?? 0}件（${match === 'exact' ? '完全一致' : '部分一致'}）`
+                : `全${totalCount ?? 0}件、2件以上選択でセット出品が可能です`}
             </p>
           </div>
           <Suspense fallback={<div className="h-10 w-48 bg-slate-200 rounded animate-pulse" />}>
@@ -55,6 +64,29 @@ export default async function SoldOutPage({
           redirectAfterDelete="/products/sold-out"
           allowSetCreation={true}
         />
+        {totalPages > 1 && (
+          <div className="mt-6 flex flex-wrap justify-center gap-2">
+            {page > 1 && (
+              <Link
+                href={`/products/sold-out?page=${page - 1}${q ? `&q=${encodeURIComponent(q)}&match=${match}` : ''}`}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 min-h-[44px] flex items-center"
+              >
+                ← 前へ
+              </Link>
+            )}
+            <span className="px-4 py-2 text-sm text-slate-600 flex items-center">
+              {page} / {totalPages}ページ
+            </span>
+            {page < totalPages && (
+              <Link
+                href={`/products/sold-out?page=${page + 1}${q ? `&q=${encodeURIComponent(q)}&match=${match}` : ''}`}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 min-h-[44px] flex items-center"
+              >
+                次へ →
+              </Link>
+            )}
+          </div>
+        )}
       </main>
     </div>
   );

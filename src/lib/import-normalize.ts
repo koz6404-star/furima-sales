@@ -1,7 +1,7 @@
 /** Excel取込用の共通正規化ロジック（API/クライアント両方で使用） */
 
 export interface ExcelRow {
-  [key: string]: string | number | undefined;
+  [key: string]: string | number | Date | undefined;
 }
 
 export interface NormalizedProduct {
@@ -19,7 +19,21 @@ export interface NormalizedProduct {
 }
 
 const normalizeKey = (s: string) =>
-  String(s).trim().toLowerCase().replace(/[\s　]/g, '');
+  String(s).trim().replace(/\uFEFF/g, '').replace(/[\s　]/g, '').toLowerCase();
+
+/** 列名で見つからない場合、日付らしき列を全走査で探す（CKB商品管理シートなど） */
+function findDateInAnyColumn(row: ExcelRow): string | number | Date | undefined {
+  const dateLikeKeys = /日|date|at|日付|datetime|発送|入荷|出荷|納品|仕入|受領/;
+  for (const [key, val] of Object.entries(row)) {
+    if (val === undefined || val === null || val === '') continue;
+    const nk = normalizeKey(key);
+    if (dateLikeKeys.test(nk)) {
+      const parsed = parseDateForStock(val as string | number | Date);
+      if (parsed) return val as string | number | Date;
+    }
+  }
+  return undefined;
+}
 
 const findColumn = (row: ExcelRow, candidates: string[]) => {
   for (const c of candidates) {
@@ -110,7 +124,23 @@ export function normalizeRow(row: ExcelRow): NormalizedProduct {
   const parsed = parseKikaku(String(kikakuVal ?? ''));
   const sizeCol = findColumn(row, ['サイズ', 'size', 'SIZE', 'サイズ（cm）', 'サイズ(cm)']);
   const colorCol = findColumn(row, ['色', 'カラー', 'color', 'COLOR', 'colour']);
-  const shippedAtVal = findColumn(row, ['出荷日', '入荷日', '仕入れ日', '発送日', 'ship_date', 'received_at']);
+  let shippedAtVal = findColumn(row, ['出荷日', '入荷日', '仕入れ日', '発送日', '発送予定日', '納品日', 'ship_date', 'received_at', 'shipped_at']);
+  if (shippedAtVal === undefined || shippedAtVal === null || shippedAtVal === '') {
+    shippedAtVal = findDateInAnyColumn(row);
+  }
+  if (shippedAtVal === undefined || shippedAtVal === null || shippedAtVal === '') {
+    const keys = Object.keys(row);
+    for (const i of [5, 6, 7]) {
+      if (keys[i]) {
+        const v = row[keys[i]];
+        const parsed = parseDateForStock(v as string | number | Date);
+        if (parsed) {
+          shippedAtVal = v as string | number | Date;
+          break;
+        }
+      }
+    }
+  }
   const stockReceivedAt = parseDateForStock(shippedAtVal);
   return {
     sku: String(findColumn(row, ['THE CKB SKU', 'THE CKBSKU', 'SKU', 'sku', '品番', '商品コード']) ?? '').trim() || undefined,
@@ -126,8 +156,8 @@ export function normalizeRow(row: ExcelRow): NormalizedProduct {
   };
 }
 
-/** Excelの日付セル（数値・文字列・Date）を YYYY-MM-DD に変換 */
-function parseDateForStock(val: string | number | undefined): string | null {
+/** Excelの日付セル（数値・文字列・Date）から年月日を抽出して YYYY-MM-DD に変換 */
+function parseDateForStock(val: string | number | Date | undefined): string | null {
   if (val === undefined || val === null || val === '') return null;
   if (typeof val === 'object' && 'getFullYear' in val) {
     const d = val as Date;
@@ -137,13 +167,21 @@ function parseDateForStock(val: string | number | undefined): string | null {
   if (!s) return null;
   const num = Number(s);
   if (!Number.isNaN(num) && num > 0) {
-    const d = XLSXDateToJSDate(num);
+    const d = XLSXDateToJSDate(Math.floor(num));
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   }
   const m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
   if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
   const m2 = s.match(/^(\d{4})(\d{2})(\d{2})/);
   if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
+  const m3 = s.match(/(\d{4})年(\d{1,2})月(\d{1,2})日?/);
+  if (m3) return `${m3[1]}-${m3[2].padStart(2, '0')}-${m3[3].padStart(2, '0')}`;
+  const m4 = s.match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (m4) return `${m4[3]}-${m4[1].padStart(2, '0')}-${m4[2].padStart(2, '0')}`;
+  const m5 = s.match(/(\d{4})[-/](\d{1,2})[-/](\d{1,2})[T\s]/);
+  if (m5) return `${m5[1]}-${m5[2].padStart(2, '0')}-${m5[3].padStart(2, '0')}`;
+  const m6 = s.match(/(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})/);
+  if (m6) return `${m6[1]}-${m6[2].padStart(2, '0')}-${String(m6[3]).padStart(2, '0')}`;
   return null;
 }
 

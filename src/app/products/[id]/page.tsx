@@ -86,7 +86,7 @@ export default async function ProductDetailPage({
     <div className="min-h-screen">
       <Nav />
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <Link href={product.stock > 0 ? '/products' : '/products/sold-out'} className="text-emerald-600 hover:underline mb-4 inline-block">
+        <Link href={product.stock > 0 ? '/products' : '/products/sold-out'} className="text-emerald-600 hover:underline mb-4 inline-block min-h-[44px] flex items-center touch-manipulation">
           ← 一覧に戻る
         </Link>
         <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-6 mb-6">

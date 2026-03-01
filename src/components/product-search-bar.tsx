@@ -47,19 +47,19 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2">
+    <form onSubmit={handleSubmit} className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto">
       <input
         type="text"
         value={inputValue}
         onChange={(e) => setInputValue(e.target.value)}
         placeholder="商品名で検索"
-        className="rounded border border-slate-300 px-3 py-2 text-sm w-48 sm:w-56 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+        className="flex-1 min-w-0 sm:flex-initial sm:w-48 md:w-56 rounded border border-slate-300 px-3 py-2.5 text-base sm:text-sm min-h-[44px] touch-manipulation focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
         aria-label="商品名検索"
       />
       <select
         value={match}
         onChange={handleMatchChange}
-        className="rounded border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+        className="rounded border border-slate-300 px-3 py-2.5 text-base sm:text-sm min-h-[44px] touch-manipulation focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
         aria-label="検索条件"
       >
         <option value="partial">部分一致</option>
@@ -68,7 +68,7 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
       <div className="flex gap-2">
         <button
           type="submit"
-          className="rounded bg-emerald-600 px-4 py-2 text-sm text-white font-medium hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1"
+          className="rounded bg-emerald-600 px-4 py-2.5 text-sm text-white font-medium min-h-[44px] touch-manipulation hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1"
         >
           検索
         </button>
@@ -76,7 +76,7 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
           <button
             type="button"
             onClick={handleClear}
-            className="rounded border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1"
+            className="rounded border border-slate-300 px-4 py-2.5 text-sm text-slate-600 min-h-[44px] touch-manipulation hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1"
           >
             クリア
           </button>

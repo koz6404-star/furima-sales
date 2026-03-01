@@ -139,8 +139,22 @@ export default async function DashboardPage({
             </p>
           </div>
         </div>
-        <div className="mb-8">
-          <DashboardCharts data={chartData} period={period} height={320} />
+        <div className="mb-8 flex flex-col lg:flex-row lg:items-start lg:gap-6">
+          <div className="flex-1 min-w-0">
+            <DashboardCharts data={chartData} period={period} height={320} />
+          </div>
+          <div
+            className="dashboard-mascot hidden sm:flex items-end justify-center lg:justify-end pt-4 lg:pt-0 lg:flex-shrink-0 lg:w-[150px]"
+            aria-hidden
+          >
+            <img
+              src="https://www.genspark.ai/api/files/s/mcgSbmtM?cache_control=3600"
+              alt="統計確認キャラクター"
+              width={135}
+              height={135}
+              className="w-[100px] sm:w-[120px] lg:w-[135px] h-auto object-contain drop-shadow-sm"
+            />
+          </div>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="font-bold text-lg mb-4">プラットフォーム別集計</h2>
