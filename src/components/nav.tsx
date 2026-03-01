@@ -9,6 +9,7 @@ const navItems = [
   { href: '/', label: 'ホーム' },
   { href: '/products', label: '商品一覧' },
   { href: '/products/sold-out', label: '完売一覧' },
+  { href: '/products/by-profit', label: '利益で検索' },
   { href: '/products/new', label: '商品登録' },
   { href: '/import', label: 'Excel取込' },
   { href: `/dashboard?period=month&year=${new Date().getFullYear()}&month=${new Date().getMonth() + 1}`, label: 'ダッシュボード' },

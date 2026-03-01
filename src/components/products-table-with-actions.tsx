@@ -31,13 +31,16 @@ export function ProductsTableWithActions({
   showStock = true,
   redirectAfterDelete = '/products',
   allowSetCreation = false,
+  fromParam,
 }: {
   products: Product[];
   locationStockMap?: Record<string, { home: number; warehouse: number }>;
   showStock?: boolean;
-  redirectAfterDelete?: '/products' | '/products/sold-out';
+  redirectAfterDelete?: '/products' | '/products/sold-out' | '/products/by-profit';
   allowSetCreation?: boolean;
+  fromParam?: 'products' | 'sold-out' | 'by-profit';
 }) {
+  const from = fromParam ?? (redirectAfterDelete === '/products' ? 'products' : redirectAfterDelete === '/products/by-profit' ? 'by-profit' : 'sold-out');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showSetModal, setShowSetModal] = useState(false);
@@ -198,7 +201,7 @@ export function ProductsTableWithActions({
                 </div>
                 <div className="flex gap-2 mt-3">
                   <Link
-                    href={`/products/${p.id}?from=${redirectAfterDelete === '/products' ? 'products' : 'sold-out'}`}
+                    href={`/products/${p.id}?from=${from}`}
                     className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] flex-1 touch-manipulation"
                   >
                     詳細
@@ -328,7 +331,7 @@ export function ProductsTableWithActions({
                 )}
                 <td className="px-3 sm:px-4 py-3 flex gap-2 items-center">
                   <Link
-                    href={`/products/${p.id}?from=${redirectAfterDelete === '/products' ? 'products' : 'sold-out'}`}
+                    href={`/products/${p.id}?from=${from}`}
                     className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] min-w-[4.5rem] touch-manipulation"
                   >
                     {showStock ? '詳細' : '詳細'}

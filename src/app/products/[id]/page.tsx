@@ -92,7 +92,7 @@ export default async function ProductDetailPage({
   const defaultMercariFee = feeRates?.find((f) => f.platform === 'mercari' && f.rate_percent === 10);
   const defaultRakumaFees = feeRates?.filter((f) => f.platform === 'rakuma') || [];
 
-  const listHref = from === 'products' ? '/products' : from === 'sold-out' ? '/products/sold-out' : (product.stock > 0 ? '/products' : '/products/sold-out');
+  const listHref = from === 'products' ? '/products' : from === 'sold-out' ? '/products/sold-out' : from === 'by-profit' ? '/products/by-profit' : (product.stock > 0 ? '/products' : '/products/sold-out');
 
   return (
     <div className="min-h-screen">
