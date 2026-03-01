@@ -2,14 +2,10 @@
 
 import { useState, useCallback, useRef } from 'react';
 
-type SpeechRecognitionType = typeof SpeechRecognition | undefined;
-type SpeechRecognitionInstance = InstanceType<NonNullable<SpeechRecognitionType>>;
-
-function getSpeechRecognition(): typeof SpeechRecognition | null {
+function getSpeechRecognition(): (new () => object) | null {
   if (typeof window === 'undefined') return null;
-  return (window as { SpeechRecognition?: typeof SpeechRecognition; webkitSpeechRecognition?: typeof SpeechRecognition }).SpeechRecognition
-    ?? (window as { webkitSpeechRecognition?: typeof SpeechRecognition }).webkitSpeechRecognition
-    ?? null;
+  const w = window as { SpeechRecognition?: new () => object; webkitSpeechRecognition?: new () => object };
+  return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
 const MicIcon = ({ className }: { className?: string }) => (
@@ -34,7 +30,7 @@ export function VoiceInputButton({
 }) {
   const [isListening, setIsListening] = useState(false);
   const [isSupported] = useState(() => getSpeechRecognition() != null);
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const recognitionRef = useRef<{ start(): void; stop(): void } | null>(null);
 
   const handleClick = useCallback(() => {
     if (!isSupported || disabled) return;
@@ -52,7 +48,8 @@ export function VoiceInputButton({
       return;
     }
 
-    const recognition = new Recognition();
+    // Web Speech API: 型定義が標準libにないため any で扱う
+    const recognition = new Recognition() as Record<string, unknown> & { start(): void; stop(): void };
     recognition.lang = 'ja-JP';
     recognition.continuous = false;
     recognition.interimResults = true;
@@ -60,7 +57,7 @@ export function VoiceInputButton({
 
     let finalText = '';
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (event: { resultIndex: number; results: { length: number; [key: number]: { isFinal: boolean; 0: { transcript: string } } } }) => {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
@@ -75,7 +72,7 @@ export function VoiceInputButton({
       if (finalText.trim()) onResult(finalText.trim());
     };
 
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+    recognition.onerror = (event: { error: string }) => {
       if (event.error !== 'aborted' && event.error !== 'no-speech') {
         console.warn('[VoiceInput]', event.error);
       }
