@@ -128,7 +128,6 @@ export default async function ProductDetailPage({
                   variant="icon"
                 />
               </div>
-              <p className="text-slate-600 mt-1">SKU: {product.sku || '-'}</p>
               {product.campaign && (
                 <div className="mt-2">
                   <span className="inline-flex items-center px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-sm">
