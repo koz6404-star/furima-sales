@@ -6,6 +6,18 @@ export const LOCATION_LABELS: Record<LocationType, string> = {
   warehouse: '倉庫',
 };
 
+/** 在庫復元（販売削除時）: 家に優先して戻す */
+export function addLocationStock(
+  homeQty: number,
+  warehouseQty: number,
+  add: number
+): { newHome: number; newWarehouse: number } {
+  return {
+    newHome: homeQty + add,
+    newWarehouse: warehouseQty,
+  };
+}
+
 /** 在庫 deduction: 家から優先して減らす */
 export function deductLocationStock(
   homeQty: number,

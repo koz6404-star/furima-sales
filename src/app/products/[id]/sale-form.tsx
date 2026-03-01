@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { calcFee, calcGrossProfit, calcProfitRatePercent } from '@/lib/calculations';
@@ -39,6 +39,7 @@ export function SaleForm({
   const [soldAt, setSoldAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -71,80 +72,83 @@ export function SaleForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setError('');
-    const qty = parseInt(quantity, 10);
-    if (!Number.isInteger(qty) || qty < 1 || qty > currentStock) {
-      setError(`販売個数は1〜${currentStock}の整数で入力してください`);
-      return;
-    }
-    if (unitPriceNum <= 0) {
-      setError('販売価格を入力してください');
-      return;
-    }
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setError('ログインしてください');
-      setLoading(false);
-      return;
-    }
-    const feePerUnit = calcFee(unitPriceNum, ratePercent, rounding);
-    const gross = calcGrossProfit(unitPriceNum, qty, feePerUnit, effectiveShippingYen, materialYenNum, costYen);
-    const { error: saleError } = await supabase.from('sales').insert({
-      user_id: user.id,
-      product_id: productId,
-      quantity: qty,
-      unit_price_yen: unitPriceNum,
-      platform,
-      fee_rate_percent: ratePercent,
-      fee_yen: feePerUnit * qty,
-      shipping_id: shippingId || null,
-      shipping_yen: effectiveShippingYen,
-      material_yen: materialYenNum,
-      gross_profit_yen: gross,
-      sold_at: soldAt,
-    });
-    if (saleError) {
-      setError(saleError.message);
-      setLoading(false);
-      return;
-    }
-    const newStock = currentStock - qty;
-    const { deductLocationStock } = await import('@/lib/location-stock');
-    const { newHome, newWarehouse } = deductLocationStock(stockAtHome, stockAtWarehouse, qty);
-    const now = new Date().toISOString();
-
-    const upsertLoc = async (loc: 'home' | 'warehouse', qty: number) => {
-      const { data: ex } = await supabase
-        .from('product_location_stock')
-        .select('quantity')
-        .eq('product_id', productId)
-        .eq('location', loc)
-        .single();
-      if (ex) {
-        await supabase.from('product_location_stock').update({ quantity: qty, updated_at: now }).eq('product_id', productId).eq('location', loc);
-      } else if (qty > 0) {
-        await supabase.from('product_location_stock').insert({ product_id: productId, location: loc, quantity: qty });
+    try {
+      const qty = parseInt(quantity, 10);
+      if (!Number.isInteger(qty) || qty < 1 || qty > currentStock) {
+        setError(`販売個数は1〜${currentStock}の整数で入力してください`);
+        return;
       }
-    };
-    await upsertLoc('home', newHome);
-    await upsertLoc('warehouse', newWarehouse);
+      if (unitPriceNum <= 0) {
+        setError('販売価格を入力してください');
+        return;
+      }
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setError('ログインしてください');
+        return;
+      }
+      const feePerUnit = calcFee(unitPriceNum, ratePercent, rounding);
+      const gross = calcGrossProfit(unitPriceNum, qty, feePerUnit, effectiveShippingYen, materialYenNum, costYen);
+      const { error: saleError } = await supabase.from('sales').insert({
+        user_id: user.id,
+        product_id: productId,
+        quantity: qty,
+        unit_price_yen: unitPriceNum,
+        platform,
+        fee_rate_percent: ratePercent,
+        fee_yen: feePerUnit * qty,
+        shipping_id: shippingId || null,
+        shipping_yen: effectiveShippingYen,
+        material_yen: materialYenNum,
+        gross_profit_yen: gross,
+        sold_at: soldAt,
+      });
+      if (saleError) {
+        setError(saleError.message);
+        return;
+      }
+      const newStock = currentStock - qty;
+      const { deductLocationStock } = await import('@/lib/location-stock');
+      const { newHome, newWarehouse } = deductLocationStock(stockAtHome, stockAtWarehouse, qty);
+      const now = new Date().toISOString();
 
-    const { error: updateError } = await supabase
-      .from('products')
-      .update({
-        stock: newStock,
-        ...(newStock === 0 && { oldest_received_at: null }),
-        updated_at: now,
-      })
-      .eq('id', productId);
-    if (updateError) {
-      setError(updateError.message);
+      const upsertLoc = async (loc: 'home' | 'warehouse', qty: number) => {
+        const { data: ex } = await supabase
+          .from('product_location_stock')
+          .select('quantity')
+          .eq('product_id', productId)
+          .eq('location', loc)
+          .single();
+        if (ex) {
+          await supabase.from('product_location_stock').update({ quantity: qty, updated_at: now }).eq('product_id', productId).eq('location', loc);
+        } else if (qty > 0) {
+          await supabase.from('product_location_stock').insert({ product_id: productId, location: loc, quantity: qty });
+        }
+      };
+      await upsertLoc('home', newHome);
+      await upsertLoc('warehouse', newWarehouse);
+
+      const { error: updateError } = await supabase
+        .from('products')
+        .update({
+          stock: newStock,
+          ...(newStock === 0 && { oldest_received_at: null }),
+          updated_at: now,
+        })
+        .eq('id', productId);
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+      router.refresh();
+    } finally {
       setLoading(false);
-      return;
+      submittingRef.current = false;
     }
-    setLoading(false);
-    router.refresh();
   };
 
   return (

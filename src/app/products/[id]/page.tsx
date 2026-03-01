@@ -8,6 +8,7 @@ import { SaleForm } from './sale-form';
 import { RestockForm } from './restock-form';
 import { LocationTransferForm } from './location-transfer-form';
 import { ProductDeleteButton } from '@/components/product-delete-button';
+import { SaleDeleteButton } from '@/components/sale-delete-button';
 import { DefaultShippingSelector } from './default-shipping-selector';
 import { StockAgeBadge } from '@/components/stock-age-badge';
 
@@ -265,12 +266,13 @@ export default async function ProductDetailPage({
                   <th className="py-2 text-right">手数料</th>
                   <th className="py-2 text-right">送料</th>
                   <th className="py-2 text-right">粗利</th>
+                  <th className="py-2 w-16"></th>
                 </tr>
               </thead>
               <tbody>
                 {(!sales || sales.length === 0) && (
                   <tr>
-                    <td colSpan={6} className="py-4 text-center text-slate-500">
+                    <td colSpan={7} className="py-4 text-center text-slate-500">
                       販売履歴がありません
                     </td>
                   </tr>
@@ -283,6 +285,15 @@ export default async function ProductDetailPage({
                     <td className="py-2 text-right">¥{s.fee_yen.toLocaleString()}</td>
                     <td className="py-2 text-right">¥{s.shipping_yen.toLocaleString()}</td>
                     <td className="py-2 text-right">¥{s.gross_profit_yen.toLocaleString()}</td>
+                    <td className="py-2">
+                      <SaleDeleteButton
+                        saleId={s.id}
+                        productId={product.id}
+                        quantity={s.quantity}
+                        stockAtHome={stockAtHome}
+                        stockAtWarehouse={stockAtWarehouse}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
