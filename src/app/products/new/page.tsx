@@ -99,10 +99,17 @@ export default function NewProductPage() {
   return (
     <div className="min-h-screen">
       <Nav />
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:gap-8">
-          <div className="flex-1 min-w-0 max-w-xl">
-        <h1 className="text-2xl font-bold mb-6">商品登録（手動）</h1>
+      <main className="container mx-auto px-4 py-8 max-w-xl">
+        <div className="flex items-center gap-4 mb-6">
+          <h1 className="text-2xl font-bold">商品登録（手動）</h1>
+          <img
+            src="/shiba-registration.png"
+            alt="入力ガイド"
+            width={80}
+            height={80}
+            className="hidden md:block w-[80px] h-auto object-contain flex-shrink-0"
+          />
+        </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">商品名 *</label>
@@ -232,20 +239,6 @@ export default function NewProductPage() {
             </Link>
           </div>
         </form>
-          </div>
-          <div
-            className="form-guide-mascot hidden lg:flex flex-shrink-0 items-center justify-center lg:pt-16"
-            aria-hidden
-          >
-            <img
-              src="/form-guide.png"
-              alt="入力ガイドキャラクター"
-              width={130}
-              height={130}
-              className="w-[120px] xl:w-[130px] h-auto object-contain drop-shadow-sm"
-            />
-          </div>
-        </div>
       </main>
     </div>
   );

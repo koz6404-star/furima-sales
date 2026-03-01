@@ -104,6 +104,18 @@ export default async function DashboardPage({
 
   return (
     <div className="min-h-screen">
+      <div
+        className="fixed bottom-6 right-6 w-[60px] md:w-[100px] z-[100] pointer-events-none"
+        aria-hidden
+      >
+        <img
+          src="/shiba-dashboard.png"
+          alt="マスコット"
+          width={100}
+          height={100}
+          className="w-full h-auto object-contain drop-shadow-sm"
+        />
+      </div>
       <Nav />
       <main className="container mx-auto px-4 py-8">
         <h1 className="text-2xl font-bold mb-4">ダッシュボード</h1>
@@ -139,22 +151,8 @@ export default async function DashboardPage({
             </p>
           </div>
         </div>
-        <div className="mb-8 flex flex-col lg:flex-row lg:items-start lg:gap-6">
-          <div className="flex-1 min-w-0">
-            <DashboardCharts data={chartData} period={period} height={320} />
-          </div>
-          <div
-            className="dashboard-mascot hidden sm:flex items-end justify-center lg:justify-end pt-4 lg:pt-0 lg:flex-shrink-0 lg:w-[150px]"
-            aria-hidden
-          >
-            <img
-              src="/dashboard-mascot.png"
-              alt="統計確認キャラクター"
-              width={135}
-              height={135}
-              className="w-[100px] sm:w-[120px] lg:w-[135px] h-auto object-contain drop-shadow-sm"
-            />
-          </div>
+        <div className="mb-8">
+          <DashboardCharts data={chartData} period={period} height={320} />
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="font-bold text-lg mb-4">プラットフォーム別集計</h2>
