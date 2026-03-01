@@ -153,11 +153,11 @@ export function SaleForm({
         <div>
           <label className="block text-sm font-medium mb-1">販売個数（在庫: {currentStock}）</label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            min={1}
-            max={currentStock}
+            onChange={(e) => setQuantity(e.target.value.replace(/[^0-9]/g, ''))}
             placeholder="1"
             className="w-full rounded border px-3 py-2"
           />
@@ -165,10 +165,12 @@ export function SaleForm({
         <div>
           <label className="block text-sm font-medium mb-1">販売価格（税込）</label>
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={unitPrice}
-            onChange={(e) => setUnitPrice(e.target.value)}
-            min={0}
+            onChange={(e) => setUnitPrice(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder="例: 1500"
             className="w-full rounded border px-3 py-2"
             required
           />
@@ -210,9 +212,11 @@ export function SaleForm({
         </select>
         {selectedShipping?.is_custom && (
           <input
-            type="number"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={customShippingYen}
-            onChange={(e) => setCustomShippingYen(e.target.value)}
+            onChange={(e) => setCustomShippingYen(e.target.value.replace(/[^0-9]/g, ''))}
             placeholder="送料（円）"
             className="mt-2 w-full rounded border px-3 py-2"
           />
@@ -221,10 +225,11 @@ export function SaleForm({
       <div>
         <label className="block text-sm font-medium mb-1">資材代（任意）</label>
         <input
-          type="number"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
           value={materialYen}
-          onChange={(e) => setMaterialYen(e.target.value)}
-          min={0}
+          onChange={(e) => setMaterialYen(e.target.value.replace(/[^0-9]/g, ''))}
           placeholder="0"
           className="w-full rounded border px-3 py-2"
         />

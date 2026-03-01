@@ -8,7 +8,15 @@ type Product = {
   name: string;
   cost_yen: number;
   stock: number;
+  campaign?: string | null;
+  size?: string | null;
+  color?: string | null;
 };
+
+function formatProductLabel(p: Product): string {
+  const parts = [p.name, p.campaign, p.size, p.color].filter(Boolean) as string[];
+  return parts.join('、');
+}
 
 export function SetCreateModal({
   selectedProducts,
@@ -20,7 +28,7 @@ export function SetCreateModal({
   onSuccess: () => void;
 }) {
   const [name, setName] = useState(
-    selectedProducts.map((p) => p.name).join(' + ') + ' セット'
+    selectedProducts.map(formatProductLabel).join(' + ') + ' セット'
   );
   const [initialStock, setInitialStock] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -148,7 +156,7 @@ export function SetCreateModal({
             </p>
           </div>
           <div className="rounded bg-slate-50 p-3 text-sm">
-            <p className="text-slate-600">構成: {selectedProducts.map((p) => p.name).join(' + ')}</p>
+            <p className="text-slate-600">構成: {selectedProducts.map(formatProductLabel).join(' + ')}</p>
             <p className="font-medium mt-1">セット原価: ¥{totalCost.toLocaleString()}</p>
           </div>
           {error && <p className="text-red-600 text-sm">{error}</p>}
