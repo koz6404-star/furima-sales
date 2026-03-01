@@ -7,7 +7,30 @@ type MatchType = 'partial' | 'exact';
 
 type LocationFilter = '' | 'home' | 'warehouse' | 'both';
 
-function buildParams(trimmed: string, match: MatchType, setOnly: boolean, location: LocationFilter): URLSearchParams {
+export type SortOption =
+  | ''
+  | 'updated_desc'
+  | 'updated_asc'
+  | 'received_desc'
+  | 'received_asc'
+  | 'stock_desc'
+  | 'stock_asc'
+  | 'cost_desc'
+  | 'cost_asc'
+  | 'name_asc'
+  | 'name_desc'
+  | 'oldest_desc'
+  | 'oldest_asc'
+  | 'target20_desc'
+  | 'target20_asc';
+
+function buildParams(
+  trimmed: string,
+  match: MatchType,
+  setOnly: boolean,
+  location: LocationFilter,
+  sort: SortOption
+): URLSearchParams {
   const params = new URLSearchParams();
   if (trimmed) {
     params.set('q', trimmed);
@@ -15,6 +38,7 @@ function buildParams(trimmed: string, match: MatchType, setOnly: boolean, locati
   }
   if (setOnly) params.set('setOnly', '1');
   if (location) params.set('location', location);
+  if (sort) params.set('sort', sort);
   return params;
 }
 
@@ -25,6 +49,7 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
   const match = (searchParams.get('match') as MatchType) ?? 'partial';
   const setOnly = searchParams.get('setOnly') === '1';
   const location = (searchParams.get('location') as LocationFilter) ?? '';
+  const sort = (searchParams.get('sort') as SortOption) ?? '';
 
   const [inputValue, setInputValue] = useState(q);
   useEffect(() => setInputValue(q), [q]);
@@ -32,28 +57,33 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      const trimmed = inputValue.trim();
-      const params = buildParams(trimmed, match, setOnly, location);
+      const params = buildParams(inputValue.trim(), match, setOnly, location, sort);
       const query = params.toString();
       router.push(query ? `${basePath}?${query}` : basePath);
     },
-    [inputValue, match, setOnly, location, basePath, router]
+    [inputValue, match, setOnly, location, sort, basePath, router]
   );
 
   const handleMatchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newMatch = e.target.value as MatchType;
-    const params = buildParams(inputValue.trim(), newMatch, setOnly, location);
+    const params = buildParams(inputValue.trim(), newMatch, setOnly, location, sort);
     router.push(params.toString() ? `${basePath}?${params.toString()}` : basePath);
   };
 
   const handleSetOnlyToggle = () => {
-    const params = buildParams(inputValue.trim(), match, !setOnly, location);
+    const params = buildParams(inputValue.trim(), match, !setOnly, location, sort);
     router.push(params.toString() ? `${basePath}?${params.toString()}` : basePath);
   };
 
   const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newLoc = e.target.value as LocationFilter;
-    const params = buildParams(inputValue.trim(), match, setOnly, newLoc);
+    const params = buildParams(inputValue.trim(), match, setOnly, newLoc, sort);
+    router.push(params.toString() ? `${basePath}?${params.toString()}` : basePath);
+  };
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newSort = e.target.value as SortOption;
+    const params = buildParams(inputValue.trim(), match, setOnly, location, newSort);
     router.push(params.toString() ? `${basePath}?${params.toString()}` : basePath);
   };
 
@@ -94,6 +124,29 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
           <option value="both">両方</option>
         </select>
       )}
+      <select
+        value={sort}
+        onChange={handleSortChange}
+        className="rounded border border-slate-300 px-3 py-2.5 text-base sm:text-sm min-h-[44px] touch-manipulation focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        aria-label="並べ替え"
+        title="並べ替え"
+      >
+        <option value="">並べ替え: 更新日順</option>
+        <option value="updated_desc">更新日（新しい順）</option>
+        <option value="updated_asc">更新日（古い順）</option>
+        <option value="received_desc">入荷日（新しい順）</option>
+        <option value="received_asc">入荷日（古い順）</option>
+        <option value="stock_desc">在庫数（多い順）</option>
+        <option value="stock_asc">在庫数（少ない順）</option>
+        <option value="cost_desc">原価（高い順）</option>
+        <option value="cost_asc">原価（低い順）</option>
+        <option value="name_asc">商品名（あいうえお）</option>
+        <option value="name_desc">商品名（逆順）</option>
+        <option value="oldest_desc">滞留在庫（新しい順）</option>
+        <option value="oldest_asc">滞留在庫（古い順）</option>
+        <option value="target20_desc">目安価格20%（高い順）</option>
+        <option value="target20_asc">目安価格20%（低い順）</option>
+      </select>
       <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2.5 min-h-[44px] cursor-pointer hover:bg-slate-50">
         <input
           type="checkbox"
@@ -110,7 +163,7 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
         >
           検索
         </button>
-        {(q || inputValue || setOnly || location) && (
+        {(q || inputValue || setOnly || location || sort) && (
           <button
             type="button"
             onClick={handleClear}

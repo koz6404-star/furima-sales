@@ -5,13 +5,15 @@ import { Suspense } from 'react';
 import { Nav } from '@/components/nav';
 import { ProductSearchBar } from '@/components/product-search-bar';
 import { ProductsTableWithActions } from '@/components/products-table-with-actions';
+import { getOrderForSort } from '@/lib/product-sort';
+import type { SortOption } from '@/components/product-search-bar';
 
 const PER_PAGE = 20;
 
 export default async function SoldOutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string }>;
+  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string; sort?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -21,7 +23,10 @@ export default async function SoldOutPage({
   const q = (params.q ?? '').trim();
   const match = params.match === 'exact' ? 'exact' : 'partial';
   const setOnly = params.setOnly === '1';
+  const sort = (params.sort as SortOption) ?? '';
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
+
+  const orderConfig = getOrderForSort(sort);
 
   let query = supabase
     .from('products')
@@ -51,12 +56,15 @@ export default async function SoldOutPage({
 
   const from = (page - 1) * PER_PAGE;
   const to = from + PER_PAGE - 1;
-  const { data: products, count: totalCount } = await query.order('updated_at', { ascending: false }).range(from, to);
+  const orderOpts: { ascending: boolean; nullsFirst?: boolean } = { ascending: orderConfig.ascending };
+  if (orderConfig.nullsFirst !== undefined) orderOpts.nullsFirst = orderConfig.nullsFirst;
+  const { data: products, count: totalCount } = await query.order(orderConfig.column, orderOpts).range(from, to);
   const totalPages = totalCount ? Math.ceil(totalCount / PER_PAGE) : 1;
   const queryStr = [
     q ? `q=${encodeURIComponent(q)}` : '',
     q ? `match=${match}` : '',
     setOnly ? 'setOnly=1' : '',
+    sort ? `sort=${encodeURIComponent(sort)}` : '',
   ].filter(Boolean).join('&');
 
   return (

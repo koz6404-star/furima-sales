@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 
 export const maxDuration = 60;
 import { createClient } from '@/lib/supabase/server';
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
     const excelPath = formData.get('excelPath') as string | null;
     const zipPath = formData.get('zipPath') as string | null;
     const skipFirstRow = formData.get('skipFirstRow') === 'true';
+    const forceImport = formData.get('forceImport') === 'true';
 
     const file = formData.get('file') as File | null;
 
@@ -56,6 +58,23 @@ export async function POST(req: NextRequest) {
     } else {
       return NextResponse.json({ error: 'Excelファイルが必要です' }, { status: 400 });
     }
+
+    const fileHash = createHash('sha256').update(buf).digest('hex');
+    if (!forceImport) {
+      const { data: existing } = await supabase
+        .from('imported_excel_files')
+        .select('file_hash')
+        .eq('user_id', user.id)
+        .eq('file_hash', fileHash)
+        .single();
+      if (existing) {
+        return NextResponse.json({
+          alreadyImported: true,
+          message: 'このファイルは過去に取り込み済みです。再度取り込むと在庫などが更新されます。続行しますか？',
+        });
+      }
+    }
+
     const rows: Record<string, unknown>[] = [];
     const imageUrlsByIndex: Record<number, string> = {};
 
@@ -410,6 +429,11 @@ export async function POST(req: NextRequest) {
       await supabase.storage.from('product-images').remove([excelPath]);
       if (zipPath) await supabase.storage.from('product-images').remove([zipPath]);
     }
+
+    await supabase.from('imported_excel_files').upsert(
+      { user_id: user.id, file_hash: fileHash, file_name: fileName, imported_at: new Date().toISOString() },
+      { onConflict: 'user_id,file_hash' }
+    );
 
     return NextResponse.json({
       created,

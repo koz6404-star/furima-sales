@@ -69,6 +69,43 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS default_shipping_yen INT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS oldest_received_at DATE;
 ```
 
+### 取り込み済みExcelの重複警告を有効にする場合
+
+同じExcelファイルを2回目以降取り込むときに警告を出したい場合は、SQL Editor で以下を実行してください:
+
+```sql
+-- supabase/migrations/011_imported_excel_files.sql の内容
+CREATE TABLE IF NOT EXISTS imported_excel_files (
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  file_hash TEXT NOT NULL,
+  file_name TEXT,
+  imported_at TIMESTAMPTZ DEFAULT now(),
+  PRIMARY KEY (user_id, file_hash)
+);
+
+CREATE INDEX idx_imported_excel_files_user ON imported_excel_files(user_id);
+
+ALTER TABLE imported_excel_files ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "imported_excel_files_all" ON imported_excel_files FOR ALL TO authenticated
+  USING (user_id = auth.uid())
+  WITH CHECK (user_id = auth.uid());
+```
+
+### 商品の並べ替え（目安価格20%ソート）を有効にする場合
+
+「目安価格20%（高い順/低い順）」のソートを使うには、SQL Editor で以下を実行してください:
+
+```sql
+-- supabase/migrations/012_product_sort_columns.sql の内容
+ALTER TABLE products ADD COLUMN IF NOT EXISTS target_price_20 INT GENERATED ALWAYS AS (
+  CASE WHEN default_shipping_yen IS NOT NULL
+  THEN CEIL((cost_yen * 1.2::numeric + default_shipping_yen) / 0.9)::int
+  ELSE NULL
+  END
+) STORED;
+```
+
 ### 保管場所機能（家・倉庫）を追加する場合
 
 在庫を「家」「倉庫」で分けて管理したい場合は、SQL Editor で以下を実行してください:

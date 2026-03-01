@@ -74,38 +74,56 @@ export default function ImportPage() {
       formData.append('skipFirstRow', String(skipFirstRow));
       if (zipPath) formData.append('zipPath', zipPath);
 
-      const res = await fetch('/api/import-excel', { method: 'POST', body: formData });
-      const text = await res.text();
-      let data: { error?: string; created?: number; updated?: number; errors?: string[]; imageCount?: number };
-      try {
-        data = text ? JSON.parse(text) : {};
-      } catch {
-        const statusHint =
-          res.status === 413
-            ? 'ファイルが大きすぎます（上限約5MB）。画像を減らすか、ZIPで画像を分けてください。'
-            : res.status >= 500
-              ? 'サーバーエラーです。しばらく後に再試行してください。'
-              : '';
-        setResult({
-          created: 0,
-          updated: 0,
-          errors: [
-            `取込に失敗しました (${res.status}): ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`,
-            statusHint,
-          ].filter(Boolean),
-        });
-        return;
-      }
+      const formDataToSend = formData;
 
-      if (!res.ok) {
-        setResult({ created: 0, updated: 0, errors: [data.error || res.statusText] });
-      } else {
+      const doImport = async (force: boolean) => {
+        if (force) formDataToSend.append('forceImport', 'true');
+        const res = await fetch('/api/import-excel', { method: 'POST', body: formDataToSend });
+        const text = await res.text();
+        let data: { error?: string; created?: number; updated?: number; errors?: string[]; imageCount?: number; alreadyImported?: boolean; message?: string };
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          const statusHint =
+            res.status === 413
+              ? 'ファイルが大きすぎます（上限約5MB）。画像を減らすか、ZIPで画像を分けてください。'
+              : res.status >= 500
+                ? 'サーバーエラーです。しばらく後に再試行してください。'
+                : '';
+          setResult({
+            created: 0,
+            updated: 0,
+            errors: [
+              `取込に失敗しました (${res.status}): ${text.slice(0, 80)}${text.length > 80 ? '...' : ''}`,
+              statusHint,
+            ].filter(Boolean),
+          });
+          return { ok: false };
+        }
+
+        if (data.alreadyImported && data.message && !force) {
+          const confirmed = window.confirm(data.message);
+          if (confirmed) return { retry: true };
+          return { ok: false };
+        }
+
+        if (!res.ok) {
+          setResult({ created: 0, updated: 0, errors: [data.error || res.statusText] });
+          return { ok: false };
+        }
+
         setResult({
           created: data.created ?? 0,
           updated: data.updated ?? 0,
           errors: data.errors ?? [],
           imageCount: data.imageCount,
         });
+        return { ok: true };
+      };
+
+      let result = await doImport(false);
+      if (result?.retry) {
+        await doImport(true);
       }
     } catch (e) {
       setResult({
