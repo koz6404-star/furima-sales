@@ -1,25 +1,50 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Nav } from '@/components/nav';
+import { DashboardFilters } from './dashboard-filters';
+import { DashboardCharts } from './dashboard-charts';
+import { Suspense } from 'react';
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string; year?: string; month?: string }>;
+}) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
+  const params = await searchParams;
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const startOfMonth = `${year}-${String(month).padStart(2, '0')}-01`;
-  const endOfMonth = new Date(year, month, 0);
-  const endStr = endOfMonth.toISOString().slice(0, 10);
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+
+  if (params.period == null && params.year == null && params.month == null) {
+    redirect(`/dashboard?period=month&year=${currentYear}&month=${currentMonth}`);
+  }
+
+  const period = params.period === 'year' ? 'year' : 'month';
+  const year = parseInt(params.year ?? String(currentYear), 10) || currentYear;
+  const month = parseInt(params.month ?? String(currentMonth), 10) || currentMonth;
+
+  let startDate: string;
+  let endDate: string;
+
+  if (period === 'year') {
+    startDate = `${year}-01-01`;
+    endDate = `${year}-12-31`;
+  } else {
+    startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const lastDay = new Date(year, month, 0).getDate();
+    endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  }
 
   const { data: sales } = await supabase
     .from('sales')
     .select('*')
     .eq('user_id', user.id)
-    .gte('sold_at', startOfMonth)
-    .lte('sold_at', endStr);
+    .gte('sold_at', startDate)
+    .lte('sold_at', endDate);
 
   let totalRevenue = 0;
   let totalFee = 0;
@@ -27,6 +52,7 @@ export default async function DashboardPage() {
   let totalMaterial = 0;
   let totalProfit = 0;
   const byPlatform: Record<string, { revenue: number; fee: number; shipping: number; profit: number }> = {};
+  const chartByKey: Record<string, { revenue: number; profit: number }> = {};
 
   for (const s of sales || []) {
     const rev = s.unit_price_yen * s.quantity;
@@ -43,17 +69,49 @@ export default async function DashboardPage() {
     byPlatform[platform].fee += s.fee_yen;
     byPlatform[platform].shipping += s.shipping_yen;
     byPlatform[platform].profit += s.gross_profit_yen;
+
+    const key = period === 'year'
+      ? String(s.sold_at).slice(0, 7)
+      : s.sold_at;
+    if (!chartByKey[key]) chartByKey[key] = { revenue: 0, profit: 0 };
+    chartByKey[key].revenue += rev;
+    chartByKey[key].profit += s.gross_profit_yen;
   }
+
+  let chartData: { label: string; 売上: number; 利益: number; 利益率: number }[] = [];
+  if (period === 'year') {
+    const monthLabels = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+    chartData = Array.from({ length: 12 }, (_, i) => {
+      const key = `${year}-${String(i + 1).padStart(2, '0')}`;
+      const d = chartByKey[key] ?? { revenue: 0, profit: 0 };
+      const rate = d.revenue > 0 ? Math.round((d.profit / d.revenue) * 100) : 0;
+      return { label: monthLabels[i], 売上: d.revenue, 利益: d.profit, 利益率: rate };
+    });
+  } else {
+    const lastDay = new Date(year, month, 0).getDate();
+    chartData = Array.from({ length: lastDay }, (_, i) => {
+      const day = i + 1;
+      const key = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const d = chartByKey[key] ?? { revenue: 0, profit: 0 };
+      const rate = d.revenue > 0 ? Math.round((d.profit / d.revenue) * 100) : 0;
+      return { label: `${day}日`, 売上: d.revenue, 利益: d.profit, 利益率: rate };
+    });
+  }
+
+  const periodLabel = period === 'year'
+    ? `${year}年の集計`
+    : `${year}年${month}月の集計`;
 
   return (
     <div className="min-h-screen">
       <Nav />
       <main className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">ダッシュボード</h1>
-        <p className="text-slate-600 mb-6">
-          {year}年{month}月の集計
-        </p>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
+        <h1 className="text-2xl font-bold mb-4">ダッシュボード</h1>
+        <Suspense fallback={<div className="h-12 mb-6" />}>
+          <DashboardFilters />
+        </Suspense>
+        <p className="text-slate-600 mb-6">{periodLabel}</p>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6 mb-6">
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <h3 className="text-sm font-medium text-slate-500">売上合計</h3>
             <p className="text-2xl font-bold mt-2">¥{totalRevenue.toLocaleString()}</p>
@@ -74,6 +132,15 @@ export default async function DashboardPage() {
             <h3 className="text-sm font-medium text-slate-500">資材代合計</h3>
             <p className="text-2xl font-bold mt-2">¥{totalMaterial.toLocaleString()}</p>
           </div>
+          <div className="rounded-lg border border-slate-200 bg-white p-6">
+            <h3 className="text-sm font-medium text-slate-500">利益率</h3>
+            <p className="text-2xl font-bold mt-2 text-emerald-600">
+              {totalRevenue > 0 ? Math.round((totalProfit / totalRevenue) * 100) : 0}%
+            </p>
+          </div>
+        </div>
+        <div className="mb-8">
+          <DashboardCharts data={chartData} period={period} height={320} />
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="font-bold text-lg mb-4">プラットフォーム別集計</h2>
@@ -101,7 +168,7 @@ export default async function DashboardPage() {
                 {Object.keys(byPlatform).length === 0 && (
                   <tr>
                     <td colSpan={5} className="py-4 text-center text-slate-500">
-                      今月の販売データがありません
+                      {periodLabel}に販売データがありません
                     </td>
                   </tr>
                 )}

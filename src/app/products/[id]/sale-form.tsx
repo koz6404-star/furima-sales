@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { calcFee, calcGrossProfit } from '@/lib/calculations';
+import { calcFee, calcGrossProfit, calcProfitRatePercent } from '@/lib/calculations';
 import type { RoundingType } from '@/types';
 
 type FeeRate = { id: string; platform: string; rate_percent: number; rakuma_rank: number | null };
@@ -59,6 +59,9 @@ export function SaleForm({
   const grossProfit = unitPriceNum > 0
     ? calcGrossProfit(unitPriceNum, quantity, feeYen / quantity, effectiveShippingYen, materialYen, costYen)
     : 0;
+  const profitRatePercent = unitPriceNum > 0 && costYen > 0
+    ? calcProfitRatePercent(grossProfit, costYen * quantity)
+    : null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,10 +204,15 @@ export function SaleForm({
           className="w-full rounded border px-3 py-2"
         />
       </div>
-      <div className="rounded bg-slate-50 p-4">
+      <div className="rounded bg-slate-50 p-4 space-y-1">
         <p className="text-sm">
           粗利: <strong>¥{grossProfit.toLocaleString()}</strong>
         </p>
+        {profitRatePercent !== null && (
+          <p className="text-sm font-medium text-emerald-700">
+            利益率: <strong>{profitRatePercent}%</strong>
+          </p>
+        )}
       </div>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button

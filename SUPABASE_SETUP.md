@@ -42,6 +42,24 @@ ALTER TABLE products ADD COLUMN IF NOT EXISTS size TEXT;
 ALTER TABLE products ADD COLUMN IF NOT EXISTS color TEXT;
 ```
 
+### 入荷日を追加する場合
+
+`products` に `stock_received_at`（入荷日）を追加する場合は、SQL Editor で以下を実行してください:
+
+```sql
+-- supabase/migrations/005_add_stock_received_at.sql の内容
+ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_received_at DATE;
+```
+
+### 目安価格用送料を追加する場合
+
+`products` に `default_shipping_yen`（目安価格計算用のデフォルト送料）を追加する場合は、SQL Editor で以下を実行してください:
+
+```sql
+-- supabase/migrations/006_add_default_shipping_yen.sql の内容
+ALTER TABLE products ADD COLUMN IF NOT EXISTS default_shipping_yen INT;
+```
+
 ### Excel取込で画像を反映する場合（Storage ポリシー）
 
 Excelの埋め込み画像をアップロードするには、SQL Editor で以下を実行してください:

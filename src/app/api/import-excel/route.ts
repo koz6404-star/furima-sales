@@ -211,6 +211,7 @@ export async function POST(req: NextRequest) {
       size?: string;
       color?: string;
       imageRef?: string;
+      stockReceivedAt?: string;
       origIndex: number;
     }[] = [];
 
@@ -231,6 +232,7 @@ export async function POST(req: NextRequest) {
         size: first.row.size ?? undefined,
         color: first.row.color ?? undefined,
         imageRef: first.row.imageRef ?? undefined,
+        stockReceivedAt: first.row.stockReceivedAt ?? undefined,
         origIndex: first.origIndex,
       });
     }
@@ -246,6 +248,7 @@ export async function POST(req: NextRequest) {
         size: item.row.size ?? undefined,
         color: item.row.color ?? undefined,
         imageRef: item.row.imageRef ?? undefined,
+        stockReceivedAt: item.row.stockReceivedAt ?? undefined,
         origIndex: item.origIndex,
       });
     }
@@ -315,6 +318,7 @@ export async function POST(req: NextRequest) {
         size: m.size || null,
         color: m.color || null,
         ...(imageUrl && { image_url: imageUrl }),
+        ...(m.stockReceivedAt && { stock_received_at: m.stockReceivedAt }),
       };
 
       if (existing) {

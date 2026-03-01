@@ -129,7 +129,7 @@ export default function ImportPage() {
           <div>
             <h2 className="font-semibold mb-2">1. Excelファイル（.xlsx）</h2>
             <p className="text-sm text-slate-600 mb-2">
-              推奨列: 商品名, THE CKB SKU, 規格, 商品数, 1個あたりのコスト（円）など。CKB商品管理シート.xlsx は埋め込み画像・規格（サイズ/色）・商品数に自動対応します。同一SKUは在庫合算・原価は加重平均で統一されます。
+              推奨列: 商品名, THE CKB SKU, 規格, 商品数, 1個あたりのコスト（円）, 出荷日など。CKB商品管理シート.xlsx は埋め込み画像・規格（サイズ/色）・商品数・出荷日（→入荷日）に自動対応します。同一SKUは在庫合算・原価は加重平均で統一されます。
             </p>
             <p className="text-xs text-slate-500 mb-1">
               ※ExcelはSupabaseに直接アップロードするため、大容量ファイル（埋め込み画像含む）も取り込めます。
@@ -198,10 +198,10 @@ export default function ImportPage() {
             1行=1商品。SKUが既存と一致すれば更新、なければ新規。列名のゆらぎは推測マッピングで対応します。
           </p>
           <pre className="mt-4 p-4 bg-slate-100 rounded text-sm overflow-x-auto">
-{`商品名 | THE CKB SKU | 規格 | 商品数 | 1個あたりのコスト（円） | 備考
-防鳥ネット | 7d126de6... | 色:緑; 規格:幅5m×長20m | 10 | 415 | テスト用
+{`商品名 | THE CKB SKU | 規格 | 商品数 | 1個あたりのコスト（円） | 出荷日 | 備考
+防鳥ネット | 7d126de6... | 色:緑; 規格:幅5m×長20m | 10 | 415 | 2025-02-15 | テスト用
 
-※商品数→在庫に自動反映。規格からサイズ/色を自動抽出。
+※商品数→在庫、出荷日→入荷日に自動反映。規格からサイズ/色を自動抽出。
 ※CKB商品管理シート.xlsx は埋め込み画像を自動取込`}
           </pre>
         </div>

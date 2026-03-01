@@ -67,6 +67,8 @@ CREATE TABLE products (
   campaign TEXT,
   size TEXT,
   color TEXT,
+  stock_received_at DATE,
+  default_shipping_yen INT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );

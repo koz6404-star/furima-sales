@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -16,10 +16,25 @@ export default function NewProductPage() {
   const [color, setColor] = useState('');
   const [memo, setMemo] = useState('');
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [stockReceivedAt, setStockReceivedAt] = useState('');
+  const [defaultShippingYen, setDefaultShippingYen] = useState<string>('');
+  const [shippingOptions, setShippingOptions] = useState<{ display_name: string; base_fee_yen: number }[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const supabase = createClient();
+
+  useEffect(() => {
+    supabase
+      .from('shipping_rates')
+      .select('display_name, base_fee_yen')
+      .eq('platform', 'mercari')
+      .eq('is_custom', false)
+      .order('base_fee_yen')
+      .then(({ data }) => {
+        if (data?.length) setShippingOptions(data);
+      });
+  }, [supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,6 +84,8 @@ export default function NewProductPage() {
       color: color || null,
       memo: memo || null,
       image_url: imageUrl,
+      stock_received_at: stockReceivedAt.trim() || null,
+      default_shipping_yen: defaultShippingYen ? parseInt(defaultShippingYen, 10) : null,
     });
     setLoading(false);
     if (error) {
@@ -113,6 +130,29 @@ export default function NewProductPage() {
               className="w-full rounded border border-slate-300 px-3 py-2"
               min={0}
               required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">目安価格用送料（任意）</label>
+            <p className="text-xs text-slate-500 mb-1">利益20%・30%目安価格の計算に使用。未選択時は210円（ネコポス相当）</p>
+            <select
+              value={defaultShippingYen}
+              onChange={(e) => setDefaultShippingYen(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2"
+            >
+              <option value="">未設定（210円を使用）</option>
+              {shippingOptions.map((s) => (
+                <option key={`${s.display_name}-${s.base_fee_yen}`} value={s.base_fee_yen}>{s.display_name} ¥{s.base_fee_yen}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">入荷日（任意）</label>
+            <input
+              type="date"
+              value={stockReceivedAt}
+              onChange={(e) => setStockReceivedAt(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2"
             />
           </div>
           <div>

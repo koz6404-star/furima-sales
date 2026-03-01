@@ -46,7 +46,7 @@ export default async function HomePage() {
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="font-semibold text-lg mb-4">月次集計</h2>
           <p className="text-slate-500">集計データはダッシュボードページで表示されます。</p>
-          <Link href="/dashboard" className="mt-4 inline-block text-emerald-600 hover:underline">
+          <Link href={`/dashboard?period=month&year=${new Date().getFullYear()}&month=${new Date().getMonth() + 1}`} className="mt-4 inline-block text-emerald-600 hover:underline">
             詳細を見る →
           </Link>
         </div>

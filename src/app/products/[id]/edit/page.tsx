@@ -13,6 +13,9 @@ export default function ProductEditPage() {
   const [size, setSize] = useState('');
   const [color, setColor] = useState('');
   const [memo, setMemo] = useState('');
+  const [stockReceivedAt, setStockReceivedAt] = useState('');
+  const [defaultShippingYen, setDefaultShippingYen] = useState<string>('');
+  const [shippingOptions, setShippingOptions] = useState<{ display_name: string; base_fee_yen: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -28,9 +31,17 @@ export default function ProductEditPage() {
         router.replace('/login');
         return;
       }
+      const { data: shippingData } = await supabase
+        .from('shipping_rates')
+        .select('display_name, base_fee_yen')
+        .eq('platform', 'mercari')
+        .eq('is_custom', false)
+        .order('base_fee_yen');
+      if (shippingData?.length) setShippingOptions(shippingData);
+
       const { data, error: fetchError } = await supabase
         .from('products')
-        .select('name, sku, campaign, size, color, memo')
+        .select('name, sku, campaign, size, color, memo, stock_received_at, default_shipping_yen')
         .eq('id', id)
         .eq('user_id', user.id)
         .single();
@@ -45,6 +56,8 @@ export default function ProductEditPage() {
       setSize(data.size || '');
       setColor(data.color || '');
       setMemo(data.memo || '');
+      setStockReceivedAt(data.stock_received_at ? String(data.stock_received_at).slice(0, 10) : '');
+      setDefaultShippingYen(data.default_shipping_yen != null ? String(data.default_shipping_yen) : '');
       setLoading(false);
     })();
   }, [id, supabase, router]);
@@ -68,6 +81,8 @@ export default function ProductEditPage() {
         size: size.trim() || null,
         color: color.trim() || null,
         memo: memo.trim() || null,
+        stock_received_at: stockReceivedAt.trim() || null,
+        default_shipping_yen: defaultShippingYen ? parseInt(defaultShippingYen, 10) : null,
         updated_at: new Date().toISOString(),
       })
       .eq('id', id)
@@ -157,6 +172,29 @@ export default function ProductEditPage() {
                 className="w-full rounded border border-slate-300 px-3 py-2"
               />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">目安価格用送料（任意）</label>
+            <p className="text-xs text-slate-500 mb-1">利益20%・30%目安価格の計算に使用。未選択時は210円（ネコポス相当）</p>
+            <select
+              value={defaultShippingYen}
+              onChange={(e) => setDefaultShippingYen(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2"
+            >
+              <option value="">未設定（210円を使用）</option>
+              {shippingOptions.map((s) => (
+                <option key={`${s.display_name}-${s.base_fee_yen}`} value={s.base_fee_yen}>{s.display_name} ¥{s.base_fee_yen}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">入荷日（任意）</label>
+            <input
+              type="date"
+              value={stockReceivedAt}
+              onChange={(e) => setStockReceivedAt(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">メモ</label>

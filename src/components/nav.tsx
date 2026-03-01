@@ -10,7 +10,7 @@ const navItems = [
   { href: '/products/sold-out', label: '完売一覧' },
   { href: '/products/new', label: '商品登録' },
   { href: '/import', label: 'Excel取込' },
-  { href: '/dashboard', label: 'ダッシュボード' },
+  { href: `/dashboard?period=month&year=${new Date().getFullYear()}&month=${new Date().getMonth() + 1}`, label: 'ダッシュボード' },
   { href: '/settings', label: '設定' },
 ];
 
@@ -33,7 +33,7 @@ export function Nav() {
                     key={href}
                     href={href}
                     className={`text-sm font-medium ${
-                      pathname === href
+                      href.startsWith('/dashboard') ? pathname.startsWith('/dashboard') : pathname === href
                         ? 'text-emerald-600'
                         : 'text-slate-600 hover:text-slate-900'
                     }`}

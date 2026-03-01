@@ -3,10 +3,11 @@ import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Nav } from '@/components/nav';
-import { calcPriceWithMargin20, calcPriceWithMargin30, calcFee, calcGrossProfit } from '@/lib/calculations';
+import { calcTargetPriceForMargin, calcFee } from '@/lib/calculations';
 import { SaleForm } from './sale-form';
 import { RestockForm } from './restock-form';
 import { ProductDeleteButton } from '@/components/product-delete-button';
+import { DefaultShippingSelector } from './default-shipping-selector';
 
 export default async function ProductDetailPage({
   params,
@@ -67,12 +68,16 @@ export default async function ProductDetailPage({
     });
   }
 
-  const price20 = calcPriceWithMargin20(product.cost_yen);
-  const price30 = calcPriceWithMargin30(product.cost_yen);
-  const fee20 = calcFee(price20, 10, 'floor');
-  const gross20 = price20 - fee20 - product.cost_yen;
-  const fee30 = calcFee(price30, 10, 'floor');
-  const gross30 = price30 - fee30 - product.cost_yen;
+  const nekoPos = shippingRates?.find((s) => s.platform === 'mercari' && (s.display_name || '').includes('ネコポス'));
+  const defaultShippingYen = product.default_shipping_yen ?? nekoPos?.base_fee_yen ?? 210;
+  const defaultMaterialYen = 0;
+  const feeRatePercent = 10;
+  const price20 = calcTargetPriceForMargin(product.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 20);
+  const price30 = calcTargetPriceForMargin(product.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 30);
+  const fee20 = calcFee(price20, feeRatePercent, 'floor');
+  const fee30 = calcFee(price30, feeRatePercent, 'floor');
+  const gross20 = price20 - fee20 - defaultShippingYen - defaultMaterialYen - product.cost_yen;
+  const gross30 = price30 - fee30 - defaultShippingYen - defaultMaterialYen - product.cost_yen;
 
   const defaultMercariFee = feeRates?.find((f) => f.platform === 'mercari' && f.rate_percent === 10);
   const defaultRakumaFees = feeRates?.filter((f) => f.platform === 'rakuma') || [];
@@ -140,14 +145,29 @@ export default async function ProductDetailPage({
                   <span className="text-slate-500">在庫数</span>
                   <p className="font-semibold">{product.stock}</p>
                 </div>
+                {product.stock_received_at && (
+                  <div>
+                    <span className="text-slate-500">入荷日</span>
+                    <p className="font-semibold">{String(product.stock_received_at).slice(0, 10)}</p>
+                  </div>
+                )}
                 <div>
                   <span className="text-slate-500">利益20%目安価格</span>
-                  <p className="font-semibold">¥{price20.toLocaleString()}（粗利¥{gross20.toLocaleString()}）</p>
+                  <p className="font-semibold">¥{price20.toLocaleString()}</p>
+                  <p className="text-slate-600 text-xs mt-0.5">原価¥{product.cost_yen.toLocaleString()} / 送料¥{defaultShippingYen.toLocaleString()} / 手数料¥{fee20.toLocaleString()} / 資材代¥{defaultMaterialYen.toLocaleString()} → 粗利¥{gross20.toLocaleString()}</p>
                 </div>
                 <div>
                   <span className="text-slate-500">利益30%目安価格</span>
-                  <p className="font-semibold">¥{price30.toLocaleString()}（粗利¥{gross30.toLocaleString()}）</p>
+                  <p className="font-semibold">¥{price30.toLocaleString()}</p>
+                  <p className="text-slate-600 text-xs mt-0.5">原価¥{product.cost_yen.toLocaleString()} / 送料¥{defaultShippingYen.toLocaleString()} / 手数料¥{fee30.toLocaleString()} / 資材代¥{defaultMaterialYen.toLocaleString()} → 粗利¥{gross30.toLocaleString()}</p>
                 </div>
+              </div>
+              <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
+                <DefaultShippingSelector
+                  productId={product.id}
+                  currentYen={(product as { default_shipping_yen?: number }).default_shipping_yen ?? 0}
+                  options={(shippingRates ?? []).filter((s) => s.platform === 'mercari' && !(s as { is_custom?: boolean }).is_custom).map((s) => ({ display_name: s.display_name, base_fee_yen: s.base_fee_yen }))}
+                />
               </div>
               {setComponentNames.length > 0 && (
                 <div className="mt-3 text-sm">

@@ -14,6 +14,8 @@ export interface NormalizedProduct {
   size?: string;
   color?: string;
   imageRef?: string;
+  /** 入荷日（出荷日から引用） YYYY-MM-DD */
+  stockReceivedAt?: string;
 }
 
 const normalizeKey = (s: string) =>
@@ -108,6 +110,8 @@ export function normalizeRow(row: ExcelRow): NormalizedProduct {
   const parsed = parseKikaku(String(kikakuVal ?? ''));
   const sizeCol = findColumn(row, ['サイズ', 'size', 'SIZE', 'サイズ（cm）', 'サイズ(cm)']);
   const colorCol = findColumn(row, ['色', 'カラー', 'color', 'COLOR', 'colour']);
+  const shippedAtVal = findColumn(row, ['出荷日', '入荷日', '仕入れ日', '発送日', 'ship_date', 'received_at']);
+  const stockReceivedAt = parseDateForStock(shippedAtVal);
   return {
     sku: String(findColumn(row, ['THE CKB SKU', 'THE CKBSKU', 'SKU', 'sku', '品番', '商品コード']) ?? '').trim() || undefined,
     name: String(findColumn(row, ['商品名', 'name', '品名']) ?? '').trim(),
@@ -118,5 +122,33 @@ export function normalizeRow(row: ExcelRow): NormalizedProduct {
     size: String(sizeCol ?? parsed.size ?? '').trim() || undefined,
     color: String(colorCol ?? parsed.color ?? '').trim() || undefined,
     imageRef: String(findColumn(row, ['画像', '画像ファイル', 'image', '写真', 'ファイル名']) ?? '').trim() || undefined,
+    stockReceivedAt: stockReceivedAt || undefined,
   };
+}
+
+/** Excelの日付セル（数値・文字列・Date）を YYYY-MM-DD に変換 */
+function parseDateForStock(val: string | number | undefined): string | null {
+  if (val === undefined || val === null || val === '') return null;
+  if (typeof val === 'object' && 'getFullYear' in val) {
+    const d = val as Date;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  const s = String(val).trim();
+  if (!s) return null;
+  const num = Number(s);
+  if (!Number.isNaN(num) && num > 0) {
+    const d = XLSXDateToJSDate(num);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  const m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  const m2 = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
+  return null;
+}
+
+function XLSXDateToJSDate(serial: number): Date {
+  const utc = Math.floor(serial) - 25569;
+  const date = new Date(utc * 86400 * 1000);
+  return date;
 }

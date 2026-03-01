@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
-import { calcPriceWithMargin20, calcPriceWithMargin30, calcFee } from '@/lib/calculations';
+import { calcTargetPriceForMargin, calcFee } from '@/lib/calculations';
 import { ProductDeleteButton } from './product-delete-button';
 import { SetCreateModal } from './set-create-modal';
 
@@ -19,6 +19,8 @@ type Product = {
   campaign: string | null;
   size: string | null;
   color: string | null;
+  stock_received_at?: string | null;
+  default_shipping_yen?: number | null;
 };
 
 export function ProductsTableWithActions({
@@ -149,6 +151,7 @@ export function ProductsTableWithActions({
             {showStock && (
               <th className="px-4 py-3 text-right text-sm font-semibold">在庫</th>
             )}
+            <th className="px-4 py-3 text-right text-sm font-semibold">入荷日</th>
             <th className="px-4 py-3 text-right text-sm font-semibold">原価</th>
             {showStock && (
               <>
@@ -164,7 +167,7 @@ export function ProductsTableWithActions({
           {(!products || products.length === 0) && (
             <tr>
               <td
-                colSpan={showStock ? 11 : 7}
+                colSpan={showStock ? 12 : 8}
                 className="px-4 py-8 text-center text-slate-500"
               >
                 {showStock ? '在庫ありの商品がありません' : '完売商品がありません'}
@@ -172,10 +175,13 @@ export function ProductsTableWithActions({
             </tr>
           )}
           {products?.map((p) => {
-            const price20 = calcPriceWithMargin20(p.cost_yen);
-            const price30 = calcPriceWithMargin30(p.cost_yen);
-            const fee20 = calcFee(price20, 10, 'floor');
-            const gross20 = price20 - fee20 - p.cost_yen;
+            const defaultShippingYen = p.default_shipping_yen ?? 210;
+            const defaultMaterialYen = 0;
+            const feeRatePercent = 10;
+            const price20 = calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 20);
+            const price30 = calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 30);
+            const fee20 = calcFee(price20, feeRatePercent, 'floor');
+            const gross20 = price20 - fee20 - defaultShippingYen - defaultMaterialYen - p.cost_yen;
             return (
               <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-3 w-14 min-w-[3.5rem] text-center bg-emerald-50/50 border-r border-emerald-100/50 align-middle p-0">
@@ -213,6 +219,9 @@ export function ProductsTableWithActions({
                 {showStock && (
                   <td className="px-4 py-3 text-right">{p.stock}</td>
                 )}
+                <td className="px-4 py-3 text-right text-slate-600">
+                  {p.stock_received_at ? String(p.stock_received_at).slice(0, 10) : '-'}
+                </td>
                 <td className="px-4 py-3 text-right">¥{p.cost_yen.toLocaleString()}</td>
                 {showStock && (
                   <>
