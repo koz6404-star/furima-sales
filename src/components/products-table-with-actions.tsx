@@ -198,7 +198,7 @@ export function ProductsTableWithActions({
                 </div>
                 <div className="flex gap-2 mt-3">
                   <Link
-                    href={`/products/${p.id}`}
+                    href={`/products/${p.id}?from=${redirectAfterDelete === '/products' ? 'products' : 'sold-out'}`}
                     className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] flex-1 touch-manipulation"
                   >
                     詳細
@@ -328,7 +328,7 @@ export function ProductsTableWithActions({
                 )}
                 <td className="px-3 sm:px-4 py-3 flex gap-2 items-center">
                   <Link
-                    href={`/products/${p.id}`}
+                    href={`/products/${p.id}?from=${redirectAfterDelete === '/products' ? 'products' : 'sold-out'}`}
                     className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] min-w-[4.5rem] touch-manipulation"
                   >
                     {showStock ? '詳細' : '詳細'}

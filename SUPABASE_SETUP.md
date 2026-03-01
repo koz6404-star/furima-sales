@@ -31,6 +31,16 @@ https://supabase.com/dashboard/project/ewxzsftkxkqrvhjavrfd/sql/new
 
 これでセットアップ完了です。方法B（スクリプト）は接続文字列が必要な場合の代替です。
 
+### ゆうパケットポスト（メルカリ）の料金を215円に訂正する場合
+
+既存の shipping_rates でゆうパケットポストが220円になっている場合、SQL Editor で以下を実行してください:
+
+```sql
+UPDATE shipping_rates
+SET base_fee_yen = 215
+WHERE platform = 'mercari' AND display_name = 'ゆうパケットポスト';
+```
+
 ### 既存プロジェクトで products に企画・サイズ・色を追加する場合
 
 すでに `setup-all-in-one.sql` を実行済みで、その後に `products` に `campaign` / `size` / `color` を追加した場合は、SQL Editor で以下を実行してください:

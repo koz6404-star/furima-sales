@@ -158,7 +158,7 @@ INSERT INTO shipping_rates (platform, display_name, base_fee_yen, size_label) VA
   ('mercari', '宅急便160', 1700, '160'),
   ('mercari', 'ゆうパケットポストmini', 160, NULL),
   ('mercari', 'ゆうパケット', 230, NULL),
-  ('mercari', 'ゆうパケットポスト', 220, NULL),
+  ('mercari', 'ゆうパケットポスト', 215, NULL),
   ('mercari', 'ゆうパケットプラス', 455, NULL),
   ('mercari', 'ゆうパック60', 770, '60'),
   ('mercari', 'ゆうパック80', 900, '80'),

@@ -13,10 +13,13 @@ import { StockAgeBadge } from '@/components/stock-age-badge';
 
 export default async function ProductDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
 }) {
   const { id } = await params;
+  const { from } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -88,11 +91,13 @@ export default async function ProductDetailPage({
   const defaultMercariFee = feeRates?.find((f) => f.platform === 'mercari' && f.rate_percent === 10);
   const defaultRakumaFees = feeRates?.filter((f) => f.platform === 'rakuma') || [];
 
+  const listHref = from === 'products' ? '/products' : from === 'sold-out' ? '/products/sold-out' : (product.stock > 0 ? '/products' : '/products/sold-out');
+
   return (
     <div className="min-h-screen">
       <Nav />
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <Link href={product.stock > 0 ? '/products' : '/products/sold-out'} className="text-emerald-600 hover:underline mb-4 inline-block min-h-[44px] flex items-center touch-manipulation">
+        <Link href={listHref} className="text-emerald-600 hover:underline mb-4 inline-block min-h-[44px] flex items-center touch-manipulation">
           ← 一覧に戻る
         </Link>
         <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-6 mb-6">
@@ -130,7 +135,7 @@ export default async function ProductDetailPage({
                 <ProductDeleteButton
                   productId={product.id}
                   productName={product.name}
-                  redirectTo={product.stock > 0 ? '/products' : '/products/sold-out'}
+                  redirectTo={listHref as '/products' | '/products/sold-out'}
                   variant="icon"
                 />
               </div>

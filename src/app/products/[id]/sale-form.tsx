@@ -29,13 +29,13 @@ export function SaleForm({
   shippingRates: ShippingRate[];
   settings: Setting[];
 }) {
-  const [quantity, setQuantity] = useState('1');
+  const [quantity, setQuantity] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
   const [platform, setPlatform] = useState<'mercari' | 'rakuma'>('mercari');
   const [shippingId, setShippingId] = useState('');
   const [shippingYen, setShippingYen] = useState(0);
   const [customShippingYen, setCustomShippingYen] = useState('');
-  const [materialYen, setMaterialYen] = useState('0');
+  const [materialYen, setMaterialYen] = useState('');
   const [soldAt, setSoldAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
