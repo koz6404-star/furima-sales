@@ -31,14 +31,23 @@ export function ProductDeleteButton({
       setLoading(false);
       return;
     }
+    const { data: setCheck } = await supabase.from('product_set_items').select('set_product_id').eq('set_product_id', productId).limit(1).maybeSingle();
+    const isSet = !!setCheck;
+
     const { error } = await supabase.rpc('delete_product_with_stock_restore', {
       p_product_id: productId,
       p_user_id: user.id,
     });
     setLoading(false);
     if (!error) {
-      router.push(redirectTo);
-      router.refresh();
+      if (isSet && redirectTo.includes('/sold-out')) {
+        router.push('/products');
+        router.refresh();
+        alert('構成商品の在庫を復元しました。商品一覧をご確認ください。');
+      } else {
+        router.push(redirectTo);
+        router.refresh();
+      }
     } else {
       alert('削除に失敗しました: ' + error.message);
     }
