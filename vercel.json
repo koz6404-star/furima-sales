@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "src/app/api/import-excel/route.ts": {
-      "maxDuration": 300
+      "maxDuration": 60
     }
   }
 }
