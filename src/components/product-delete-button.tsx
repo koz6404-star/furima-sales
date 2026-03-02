@@ -12,7 +12,7 @@ export function ProductDeleteButton({
 }: {
   productId: string;
   productName: string;
-  redirectTo: '/products' | '/products/sold-out' | '/products/by-profit';
+  redirectTo: string;
   variant?: 'danger' | 'ghost' | 'icon';
 }) {
   const [loading, setLoading] = useState(false);

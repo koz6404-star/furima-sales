@@ -122,7 +122,7 @@ export default function ProductEditPage() {
         <Nav />
         <main className="container mx-auto px-4 py-8 max-w-xl">
           <p className="text-red-600">{error}</p>
-          <Link href="/products" className="text-emerald-600 hover:underline mt-4 inline-block">← 一覧に戻る</Link>
+          <Link href={`/products/${id}`} className="text-emerald-600 hover:underline mt-4 inline-block">← 戻る</Link>
         </main>
       </div>
     );

@@ -9,6 +9,7 @@ import { calcTargetPriceForMargin } from '@/lib/calculations';
 import { ProductDeleteButton } from './product-delete-button';
 import { SetCreateModal } from './set-create-modal';
 import { StockAgeBadge } from './stock-age-badge';
+import { LocationQuickTransfer } from './location-quick-transfer';
 
 const SELECTION_STORAGE_KEY = 'products-set-selection';
 
@@ -56,6 +57,7 @@ export function ProductsTableWithActions({
   redirectAfterDelete = '/products',
   allowSetCreation = false,
   fromParam,
+  returnTo,
 }: {
   products: Product[];
   locationStockMap?: Record<string, { home: number; warehouse: number }>;
@@ -63,8 +65,10 @@ export function ProductsTableWithActions({
   redirectAfterDelete?: '/products' | '/products/sold-out' | '/products/by-profit';
   allowSetCreation?: boolean;
   fromParam?: 'products' | 'sold-out' | 'by-profit';
+  returnTo?: string;
 }) {
   const from = fromParam ?? (redirectAfterDelete === '/products' ? 'products' : redirectAfterDelete === '/products/by-profit' ? 'by-profit' : 'sold-out');
+  const detailQuery = returnTo ? `?from=${from}&returnTo=${encodeURIComponent(returnTo)}` : `?from=${from}`;
   const [selected, setSelected] = useState<Set<string>>(loadSelectedFromStorage);
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [showSetModal, setShowSetModal] = useState(false);
@@ -246,7 +250,14 @@ export function ProductsTableWithActions({
                       <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="badge-only" />
                       {showStock && (
                         <>
-                          <span>家: {locationStockMap[p.id]?.home ?? '-'}</span>
+                          <span className="inline-flex items-center gap-1">
+                            家: {locationStockMap[p.id]?.home ?? '-'}
+                            <LocationQuickTransfer
+                              productId={p.id}
+                              stockAtHome={locationStockMap[p.id]?.home ?? 0}
+                              stockAtWarehouse={locationStockMap[p.id]?.warehouse ?? 0}
+                            />
+                          </span>
                           <span>倉庫: {locationStockMap[p.id]?.warehouse ?? '-'}</span>
                           <span>在庫: {p.stock}</span>
                         </>
@@ -264,7 +275,7 @@ export function ProductsTableWithActions({
                 </div>
                 <div className="flex gap-2 mt-3">
                   <Link
-                    href={`/products/${p.id}?from=${from}`}
+                    href={`/products/${p.id}${detailQuery}`}
                     className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] flex-1 touch-manipulation"
                   >
                     詳細
@@ -377,7 +388,16 @@ export function ProductsTableWithActions({
                 </td>
                 {showStock && (
                   <>
-                    <td className="px-4 py-3 text-right text-slate-600">{locationStockMap[p.id]?.home ?? '-'}</td>
+                    <td className="px-4 py-3 text-right text-slate-600">
+                      <span className="inline-flex items-center justify-end gap-1">
+                        {locationStockMap[p.id]?.home ?? '-'}
+                        <LocationQuickTransfer
+                          productId={p.id}
+                          stockAtHome={locationStockMap[p.id]?.home ?? 0}
+                          stockAtWarehouse={locationStockMap[p.id]?.warehouse ?? 0}
+                        />
+                      </span>
+                    </td>
                     <td className="px-4 py-3 text-right text-slate-600">{locationStockMap[p.id]?.warehouse ?? '-'}</td>
                     <td className="px-4 py-3 text-right">{p.stock}</td>
                   </>
@@ -394,7 +414,7 @@ export function ProductsTableWithActions({
                 )}
                 <td className="px-3 sm:px-4 py-3 flex gap-2 items-center">
                   <Link
-                    href={`/products/${p.id}?from=${from}`}
+                    href={`/products/${p.id}${detailQuery}`}
                     className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] min-w-[4.5rem] touch-manipulation"
                   >
                     {showStock ? '詳細' : '詳細'}

@@ -108,6 +108,10 @@ export default async function ProductsPage({
     locationFilter ? `location=${locationFilter}` : '',
     sort ? `sort=${encodeURIComponent(sort)}` : '',
   ].filter(Boolean).join('&');
+  const returnParts = [];
+  if (page > 1) returnParts.push(`page=${page}`);
+  if (queryStr) returnParts.push(queryStr);
+  const returnTo = `/products${returnParts.length ? `?${returnParts.join('&')}` : ''}`;
 
   return (
     <div className="min-h-screen">
@@ -142,6 +146,7 @@ export default async function ProductsPage({
           showStock={true}
           redirectAfterDelete="/products"
           allowSetCreation={true}
+          returnTo={returnTo}
         />
         {totalPages > 1 && (
           <div className="mt-6 flex flex-wrap justify-center gap-2">

@@ -64,6 +64,10 @@ export default async function ByProfitPage({
 
   const totalPages = totalCount ? Math.ceil(totalCount / PER_PAGE) : 1;
   const queryStr = minProfit > 0 ? `minProfit=${minProfit}` : '';
+  const returnParts = [];
+  if (page > 1) returnParts.push(`page=${page}`);
+  if (queryStr) returnParts.push(queryStr);
+  const returnTo = `/products/by-profit${returnParts.length ? `?${returnParts.join('&')}` : ''}`;
 
   return (
     <div className="min-h-screen">
@@ -92,6 +96,7 @@ export default async function ByProfitPage({
           redirectAfterDelete="/products/by-profit"
           allowSetCreation={false}
           fromParam="by-profit"
+          returnTo={returnTo}
         />
         {minProfit > 0 && totalPages > 1 && (
           <div className="mt-6 flex flex-wrap justify-center gap-2">
