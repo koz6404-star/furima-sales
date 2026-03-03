@@ -219,6 +219,7 @@ export function ProductsTableWithActions({
           const feeRatePercent = 10;
           const price20 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 20) : 0;
           const price30 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 30) : 0;
+          const priceCutLoss = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 0) : 0;
           return (
             <div
               key={p.id}
@@ -268,6 +269,7 @@ export function ProductsTableWithActions({
                         <>
                           <span className={!hasDefaultShipping ? 'text-slate-400' : ''}>{hasDefaultShipping ? `20%: ¥${price20.toLocaleString()}` : '—'}</span>
                           <span className={!hasDefaultShipping ? 'text-slate-400' : ''}>{hasDefaultShipping ? `30%: ¥${price30.toLocaleString()}` : '—'}</span>
+                          <span className={!hasDefaultShipping ? 'text-slate-400' : 'text-amber-700'}>{hasDefaultShipping ? `損切: ¥${priceCutLoss.toLocaleString()}` : '—'}</span>
                         </>
                       )}
                     </div>
@@ -327,6 +329,7 @@ export function ProductsTableWithActions({
               <>
                 <th className="px-4 py-3 text-right text-sm font-semibold">20%価格</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold">30%価格</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold">損切り価格</th>
               </>
             )}
             <th className="px-4 py-3"></th>
@@ -336,7 +339,7 @@ export function ProductsTableWithActions({
           {(!products || products.length === 0) && (
             <tr>
               <td
-                colSpan={showStock ? 13 : 8}
+                colSpan={showStock ? 14 : 8}
                 className="px-4 py-8 text-center text-slate-500"
               >
                 {showStock ? '在庫ありの商品がありません' : '完売商品がありません'}
@@ -350,6 +353,7 @@ export function ProductsTableWithActions({
             const feeRatePercent = 10;
             const price20 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 20) : 0;
             const price30 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 30) : 0;
+            const priceCutLoss = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 0) : 0;
             return (
               <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
                 <td className="px-4 py-3 w-14 min-w-[3.5rem] text-center bg-emerald-50/50 border-r border-emerald-100/50 align-middle p-0">
@@ -410,6 +414,7 @@ export function ProductsTableWithActions({
                   <>
                     <td className={`px-4 py-3 text-right ${!hasDefaultShipping ? 'text-slate-400' : ''}`}>{hasDefaultShipping ? `¥${price20.toLocaleString()}` : '—'}</td>
                     <td className={`px-4 py-3 text-right ${!hasDefaultShipping ? 'text-slate-400' : ''}`}>{hasDefaultShipping ? `¥${price30.toLocaleString()}` : '—'}</td>
+                    <td className={`px-4 py-3 text-right ${!hasDefaultShipping ? 'text-slate-400' : 'text-amber-700 font-medium'}`}>{hasDefaultShipping ? `¥${priceCutLoss.toLocaleString()}` : '—'}</td>
                   </>
                 )}
                 <td className="px-3 sm:px-4 py-3 flex gap-2 items-center">
