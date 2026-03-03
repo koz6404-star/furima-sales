@@ -2,11 +2,12 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { VoiceInputButton } from './voice-input-button';
+import { FilterSortSheet } from './filter-sort-sheet';
 import { useCallback, useEffect, useState } from 'react';
 
 type MatchType = 'partial' | 'exact';
 
-type LocationFilter = '' | 'home' | 'warehouse' | 'both';
+export type LocationFilter = '' | 'home' | 'warehouse' | 'both';
 
 export type SortOption =
   | ''
@@ -30,7 +31,8 @@ function buildParams(
   match: MatchType,
   setOnly: boolean,
   location: LocationFilter,
-  sort: SortOption
+  sort: SortOption,
+  minProfit: number
 ): URLSearchParams {
   const params = new URLSearchParams();
   if (trimmed) {
@@ -40,6 +42,7 @@ function buildParams(
   if (setOnly) params.set('setOnly', '1');
   if (location) params.set('location', location);
   if (sort) params.set('sort', sort);
+  if (minProfit > 0) params.set('minProfit', String(minProfit));
   return params;
 }
 
@@ -51,40 +54,34 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
   const setOnly = searchParams.get('setOnly') === '1';
   const location = (searchParams.get('location') as LocationFilter) ?? '';
   const sort = (searchParams.get('sort') as SortOption) ?? '';
+  const minProfit = Math.max(0, parseInt(searchParams.get('minProfit') ?? '0', 10) || 0);
 
   const [inputValue, setInputValue] = useState(q);
+  const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => setInputValue(q), [q]);
+
+  const applyFilters = useCallback(
+    (f: { location: LocationFilter; setOnly: boolean; minProfit: number; sort: SortOption }) => {
+      const params = buildParams(inputValue.trim(), match, f.setOnly, f.location, f.sort, f.minProfit);
+      const query = params.toString();
+      router.push(query ? `${basePath}?${query}` : basePath);
+    },
+    [inputValue, match, basePath, router]
+  );
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      const params = buildParams(inputValue.trim(), match, setOnly, location, sort);
+      const params = buildParams(inputValue.trim(), match, setOnly, location, sort, minProfit);
       const query = params.toString();
       router.push(query ? `${basePath}?${query}` : basePath);
     },
-    [inputValue, match, setOnly, location, sort, basePath, router]
+    [inputValue, match, setOnly, location, sort, minProfit, basePath, router]
   );
 
   const handleMatchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newMatch = e.target.value as MatchType;
-    const params = buildParams(inputValue.trim(), newMatch, setOnly, location, sort);
-    router.push(params.toString() ? `${basePath}?${params.toString()}` : basePath);
-  };
-
-  const handleSetOnlyToggle = () => {
-    const params = buildParams(inputValue.trim(), match, !setOnly, location, sort);
-    router.push(params.toString() ? `${basePath}?${params.toString()}` : basePath);
-  };
-
-  const handleLocationChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newLoc = e.target.value as LocationFilter;
-    const params = buildParams(inputValue.trim(), match, setOnly, newLoc, sort);
-    router.push(params.toString() ? `${basePath}?${params.toString()}` : basePath);
-  };
-
-  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newSort = e.target.value as SortOption;
-    const params = buildParams(inputValue.trim(), match, setOnly, location, newSort);
+    const params = buildParams(inputValue.trim(), newMatch, setOnly, location, sort, minProfit);
     router.push(params.toString() ? `${basePath}?${params.toString()}` : basePath);
   };
 
@@ -93,95 +90,104 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
     router.push(basePath);
   };
 
+  const filterCount = [setOnly, location, minProfit > 0, sort].filter(Boolean).length;
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-wrap items-stretch gap-2 w-full sm:w-auto">
-      <div className="flex flex-1 min-w-0 sm:flex-initial sm:w-48 md:w-56 rounded border border-slate-300 overflow-hidden bg-white focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          placeholder="商品名で検索"
-          className="flex-1 min-w-0 px-3 py-2.5 text-base sm:text-sm min-h-[44px] touch-manipulation focus:outline-none border-0"
-          aria-label="商品名検索"
-        />
-        <VoiceInputButton
-          onResult={(text) => setInputValue(text)}
-          className="rounded-none border-0 border-l border-slate-200 shrink-0"
-          size="md"
-          title="音声で検索"
-        />
-      </div>
-      <select
-        value={match}
-        onChange={handleMatchChange}
-        className="rounded border border-slate-300 px-3 py-2.5 text-base sm:text-sm min-h-[44px] touch-manipulation focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-        aria-label="検索条件"
-      >
-        <option value="partial">部分一致</option>
-        <option value="exact">完全一致</option>
-      </select>
-      {basePath === '/products' && (
+    <>
+      <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full min-w-0">
+        <div className="flex flex-1 min-w-0 rounded border border-slate-300 overflow-hidden bg-white focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-transparent">
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            placeholder="商品名で検索"
+            className="flex-1 min-w-0 px-3 py-2.5 text-base min-h-[44px] touch-manipulation focus:outline-none border-0"
+            aria-label="商品名検索"
+          />
+          <VoiceInputButton
+            onResult={(text) => setInputValue(text)}
+            className="rounded-none border-0 border-l border-slate-200 shrink-0"
+            size="md"
+            title="音声で検索"
+          />
+        </div>
         <select
-          value={location}
-          onChange={handleLocationChange}
-          className="rounded border border-slate-300 px-3 py-2.5 text-base sm:text-sm min-h-[44px] touch-manipulation focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          aria-label="保管場所フィルター"
+          value={match}
+          onChange={handleMatchChange}
+          className="shrink-0 rounded border border-slate-300 px-2 py-2.5 text-sm min-h-[44px] touch-manipulation focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+          aria-label="部分一致/完全一致"
+          title="部分一致/完全一致"
         >
-          <option value="">保管場所: 全て</option>
-          <option value="home">家のみ</option>
-          <option value="warehouse">倉庫のみ</option>
-          <option value="both">両方</option>
+          <option value="partial">部分</option>
+          <option value="exact">完全</option>
         </select>
-      )}
-      <select
-        value={sort}
-        onChange={handleSortChange}
-        className="rounded border border-slate-300 px-3 py-2.5 text-base sm:text-sm min-h-[44px] touch-manipulation focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        aria-label="並べ替え"
-        title="並べ替え"
-      >
-        <option value="">並べ替え: 更新日順</option>
-        <option value="updated_desc">更新日（新しい順）</option>
-        <option value="updated_asc">更新日（古い順）</option>
-        <option value="received_desc">入荷日（新しい順）</option>
-        <option value="received_asc">入荷日（古い順）</option>
-        <option value="stock_desc">在庫数（多い順）</option>
-        <option value="stock_asc">在庫数（少ない順）</option>
-        <option value="cost_desc">原価（高い順）</option>
-        <option value="cost_asc">原価（低い順）</option>
-        <option value="name_asc">商品名（あいうえお）</option>
-        <option value="name_desc">商品名（逆順）</option>
-        <option value="oldest_desc">滞留在庫（新しい順）</option>
-        <option value="oldest_asc">滞留在庫（古い順）</option>
-        <option value="target20_desc">目安価格20%（高い順）</option>
-        <option value="target20_asc">目安価格20%（低い順）</option>
-      </select>
-      <label className="flex items-center gap-2 rounded border border-slate-300 px-3 py-2.5 min-h-[44px] cursor-pointer hover:bg-slate-50">
-        <input
-          type="checkbox"
-          checked={setOnly}
-          onChange={handleSetOnlyToggle}
-          className="rounded border-slate-300"
-        />
-        <span className="text-sm whitespace-nowrap">セット品のみ</span>
-      </label>
-      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setMenuOpen(true)}
+          className="shrink-0 rounded border border-slate-300 p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-white hover:bg-slate-50"
+          aria-label="フィルター・ソート"
+          title="フィルター・ソート"
+        >
+          {filterCount > 0 ? (
+            <span className="relative inline-flex">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="4" y1="21" x2="4" y2="14" />
+                <line x1="4" y1="10" x2="4" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="12" />
+                <line x1="12" y1="8" x2="12" y2="3" />
+                <line x1="20" y1="21" x2="20" y2="16" />
+                <line x1="20" y1="12" x2="20" y2="3" />
+                <line x1="1" y1="14" x2="7" y2="14" />
+                <line x1="9" y1="8" x2="15" y2="8" />
+                <line x1="17" y1="16" x2="23" y2="16" />
+              </svg>
+              <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-bold text-white">
+                {filterCount}
+              </span>
+            </span>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="4" y1="21" x2="4" y2="14" />
+              <line x1="4" y1="10" x2="4" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12" y2="3" />
+              <line x1="20" y1="21" x2="20" y2="16" />
+              <line x1="20" y1="12" x2="20" y2="3" />
+              <line x1="1" y1="14" x2="7" y2="14" />
+              <line x1="9" y1="8" x2="15" y2="8" />
+              <line x1="17" y1="16" x2="23" y2="16" />
+            </svg>
+          )}
+        </button>
         <button
           type="submit"
-          className="rounded bg-emerald-600 px-4 py-2.5 text-sm text-white font-medium min-h-[44px] touch-manipulation hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1"
+          className="shrink-0 rounded bg-emerald-600 p-2.5 min-h-[44px] min-w-[44px] flex items-center justify-center text-white hover:bg-emerald-700"
+          aria-label="検索"
+          title="検索"
         >
-          検索
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
         </button>
-        {(q || inputValue || setOnly || location || sort) && (
+        {(q || inputValue || setOnly || location || sort || minProfit > 0) && (
           <button
             type="button"
             onClick={handleClear}
-            className="rounded border border-slate-300 px-4 py-2.5 text-sm text-slate-600 min-h-[44px] touch-manipulation hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1"
+            className="shrink-0 rounded border border-slate-300 px-3 py-2.5 text-sm text-slate-600 min-h-[44px] hover:bg-slate-50"
           >
             クリア
           </button>
         )}
-      </div>
-    </form>
+      </form>
+
+      <FilterSortSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onApply={applyFilters}
+        initial={{ location, setOnly, minProfit, sort }}
+        showLocation={basePath === '/products'}
+      />
+    </>
   );
 }

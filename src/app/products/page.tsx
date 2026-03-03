@@ -13,7 +13,7 @@ const PER_PAGE = 20;
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string; location?: string; sort?: string }>;
+  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string; location?: string; sort?: string; minProfit?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -25,6 +25,7 @@ export default async function ProductsPage({
   const setOnly = params.setOnly === '1';
   const locationFilter = params.location === 'home' || params.location === 'warehouse' || params.location === 'both' ? params.location : '';
   const sort = (params.sort as SortOption) ?? '';
+  const minProfit = Math.max(0, parseInt(params.minProfit ?? '0', 10) || 0);
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
 
   const orderConfig = getOrderForSort(sort);
@@ -73,6 +74,20 @@ export default async function ProductsPage({
     }
   }
 
+  if (minProfit > 0) {
+    const { data: sales } = await supabase
+      .from('sales')
+      .select('product_id')
+      .eq('user_id', user.id)
+      .gte('gross_profit_yen', minProfit);
+    const profitProductIds = [...new Set((sales ?? []).map((r) => r.product_id))];
+    if (profitProductIds.length > 0) {
+      query = query.in('id', profitProductIds);
+    } else {
+      query = query.eq('id', '00000000-0000-0000-0000-000000000000');
+    }
+  }
+
   if (q) {
     if (match === 'exact') {
       query = query.eq('name', q);
@@ -107,6 +122,7 @@ export default async function ProductsPage({
     setOnly ? 'setOnly=1' : '',
     locationFilter ? `location=${locationFilter}` : '',
     sort ? `sort=${encodeURIComponent(sort)}` : '',
+    minProfit > 0 ? `minProfit=${minProfit}` : '',
   ].filter(Boolean).join('&');
   const returnParts = [];
   if (page > 1) returnParts.push(`page=${page}`);
@@ -122,16 +138,20 @@ export default async function ProductsPage({
             <h1 className="text-2xl font-bold">商品一覧（在庫あり）</h1>
             <p className="text-sm text-slate-600 mt-1">
               {q
-                ? `「${q}」の検索結果: ${totalCount ?? 0}件（${match === 'exact' ? '完全一致' : '部分一致'}）${setOnly ? '・セット品のみ' : ''}`
+                ? `「${q}」の検索結果: ${totalCount ?? 0}件（${match === 'exact' ? '完全一致' : '部分一致'}）${setOnly ? '・セット品のみ' : ''}${minProfit > 0 ? `・利益¥${minProfit.toLocaleString()}以上` : ''}`
                 : setOnly
                   ? `セット品: ${totalCount ?? 0}件`
-                  : `全${totalCount ?? 0}件、2件以上選択でセット出品が可能です`}
+                  : minProfit > 0
+                    ? `利益¥${minProfit.toLocaleString()}以上で売れた商品: ${totalCount ?? 0}件`
+                    : `全${totalCount ?? 0}件、2件以上選択でセット出品が可能です`}
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Suspense fallback={<div className="h-10 w-48 bg-slate-200 rounded animate-pulse" />}>
-              <ProductSearchBar basePath="/products" />
-            </Suspense>
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div className="w-full min-w-0 sm:flex-1 sm:min-w-[200px]">
+              <Suspense fallback={<div className="h-11 bg-slate-200 rounded animate-pulse" />}>
+                <ProductSearchBar basePath="/products" />
+              </Suspense>
+            </div>
             <Link
               href="/products/new"
               className="rounded bg-emerald-600 px-4 py-2 text-white font-medium hover:bg-emerald-700 whitespace-nowrap"
