@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from './auth-provider';
 import { MascotQA } from '@/components/mascot-qa';
+import { RefreshOnFocus } from '@/components/refresh-on-focus';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -40,6 +41,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-slate-50 text-slate-900`}
       >
         <AuthProvider>
+          <RefreshOnFocus />
           {children}
           <MascotQA />
         </AuthProvider>

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/app/auth-provider';
+import { RefreshButton } from './refresh-button';
 
 const navItems = [
   { href: '/', label: 'ホーム' },
@@ -50,6 +51,7 @@ export function Nav() {
           </div>
           {user && (
             <div className="flex items-center gap-2 sm:gap-4">
+              <RefreshButton />
               <span className="hidden sm:inline text-sm text-slate-500 truncate max-w-[120px] md:max-w-[180px]">{user.email}</span>
               <button
                 onClick={() => signOut()}
