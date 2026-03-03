@@ -4,6 +4,7 @@ import {
   getDaysSinceReceived,
   getStockAgeStatus,
   STOCK_AGE_BADGE_LABELS,
+  STOCK_AGE_DOTS,
   STOCK_AGE_MESSAGES,
   type StockAgeStatus,
 } from '@/lib/stock-age';
@@ -13,8 +14,8 @@ type Props = {
   /** oldest_received_at が未設定の既存データ向けフォールバック */
   stockReceivedAt?: string | Date | null | undefined;
   stock: number;
-  /** 商品一覧用: バッジのみ。詳細用: 文言も表示 */
-  variant?: 'badge-only' | 'full';
+  /** 商品一覧用: バッジのみ。dot-only: 丸のみ。詳細用: 文言も表示 */
+  variant?: 'badge-only' | 'dot-only' | 'full';
 };
 
 /** 在庫ありかつ日付がある場合のみ表示（oldest_received_at 優先、なければ stock_received_at） */
@@ -26,6 +27,14 @@ export function StockAgeBadge({ oldestReceivedAt, stockReceivedAt, stock, varian
   const status = getStockAgeStatus(days);
 
   if (status === 'normal') return null;
+
+  if (variant === 'dot-only') {
+    return (
+      <span className="inline-flex items-center shrink-0" title={STOCK_AGE_BADGE_LABELS[status]}>
+        {STOCK_AGE_DOTS[status]}
+      </span>
+    );
+  }
 
   const badgeLabel = STOCK_AGE_BADGE_LABELS[status];
   const message = STOCK_AGE_MESSAGES[status];

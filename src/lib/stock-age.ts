@@ -42,3 +42,10 @@ export const STOCK_AGE_BADGE_LABELS: Record<Exclude<StockAgeStatus, 'normal'>, s
   warning: '🟠警告',
   danger: '🔴危険',
 };
+
+/** 一覧用：丸のみ（直感的表示） */
+export const STOCK_AGE_DOTS: Record<Exclude<StockAgeStatus, 'normal'>, string> = {
+  attention: '🟡',
+  warning: '🟠',
+  danger: '🔴',
+};

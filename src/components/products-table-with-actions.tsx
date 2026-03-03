@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client';
 import { calcTargetPriceForMargin } from '@/lib/calculations';
 import { ProductDeleteButton } from './product-delete-button';
 import { SetCreateModal } from './set-create-modal';
+import { BulkShippingModal } from './bulk-shipping-modal';
 import { StockAgeBadge } from './stock-age-badge';
 import { LocationQuickTransfer } from './location-quick-transfer';
 
@@ -74,6 +75,7 @@ export function ProductsTableWithActions({
   const [showSetModal, setShowSetModal] = useState(false);
   const [modalProducts, setModalProducts] = useState<Product[] | null>(null);
   const [preparingSetModal, setPreparingSetModal] = useState(false);
+  const [showBulkShippingModal, setShowBulkShippingModal] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -173,6 +175,15 @@ export function ProductsTableWithActions({
               {preparingSetModal ? '読み込み中...' : 'セット出品'}
             </button>
           )}
+          {showStock && (
+            <button
+              type="button"
+              onClick={() => setShowBulkShippingModal(true)}
+              className="rounded px-4 py-2.5 bg-slate-600 text-white text-sm min-h-[44px] touch-manipulation hover:bg-slate-700"
+            >
+              送料を一括変更
+            </button>
+          )}
           <button
             type="button"
             onClick={bulkDelete}
@@ -189,6 +200,17 @@ export function ProductsTableWithActions({
             選択をクリア
           </button>
         </div>
+      )}
+      {showBulkShippingModal && selected.size > 0 && (
+        <BulkShippingModal
+          productIds={Array.from(selected)}
+          onClose={() => setShowBulkShippingModal(false)}
+          onSuccess={() => {
+            setShowBulkShippingModal(false);
+            clearSelection();
+            router.refresh();
+          }}
+        />
       )}
       {showSetModal && modalProducts && modalProducts.length >= 1 && (
         <SetCreateModal
@@ -235,6 +257,12 @@ export function ProductsTableWithActions({
               </label>
               <div className="flex-1 min-w-0">
                 <div className="flex gap-3">
+                  <Link
+                    href={`/products/${p.id}${detailQuery}`}
+                    className="flex-shrink-0 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] flex items-center justify-center touch-manipulation self-start"
+                  >
+                    詳細
+                  </Link>
                   {p.image_url ? (
                     <div className="relative h-16 w-16 flex-shrink-0 rounded overflow-hidden">
                       <Image src={p.image_url} alt={p.name} fill className="object-cover" />
@@ -248,7 +276,7 @@ export function ProductsTableWithActions({
                       {[p.campaign, p.size, p.color].filter(Boolean).join(' / ') || '-'}
                     </p>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-sm text-slate-600 items-center">
-                      <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="badge-only" />
+                      <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="dot-only" />
                       {showStock && (
                         <>
                           <span className="inline-flex items-center gap-1">
@@ -263,7 +291,6 @@ export function ProductsTableWithActions({
                           <span>在庫: {p.stock}</span>
                         </>
                       )}
-                      <span>{p.stock_received_at ? String(p.stock_received_at).slice(0, 10) : '-'}</span>
                       <span>¥{p.cost_yen.toLocaleString()}</span>
                       {showStock && (
                         <>
@@ -276,12 +303,6 @@ export function ProductsTableWithActions({
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
-                  <Link
-                    href={`/products/${p.id}${detailQuery}`}
-                    className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] flex-1 touch-manipulation"
-                  >
-                    詳細
-                  </Link>
                   <ProductDeleteButton
                     productId={p.id}
                     productName={p.name}
@@ -312,6 +333,7 @@ export function ProductsTableWithActions({
                 <span className="text-sm font-semibold text-slate-700">選択</span>
               </label>
             </th>
+            <th className="px-4 py-3 text-left text-sm font-semibold">詳細</th>
             <th className="px-4 py-3 text-left text-sm font-semibold">画像</th>
             <th className="px-4 py-3 text-left text-sm font-semibold">商品名</th>
             <th className="px-4 py-3 text-left text-sm font-semibold">企画/サイズ/色</th>
@@ -323,7 +345,6 @@ export function ProductsTableWithActions({
                 <th className="px-4 py-3 text-right text-sm font-semibold">在庫</th>
               </>
             )}
-            <th className="px-4 py-3 text-right text-sm font-semibold">入荷日</th>
             <th className="px-4 py-3 text-right text-sm font-semibold">原価</th>
             {showStock && (
               <>
@@ -368,6 +389,14 @@ export function ProductsTableWithActions({
                   </label>
                 </td>
                 <td className="px-4 py-3">
+                  <Link
+                    href={`/products/${p.id}${detailQuery}`}
+                    className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700 min-h-[36px]"
+                  >
+                    詳細
+                  </Link>
+                </td>
+                <td className="px-4 py-3">
                   {p.image_url ? (
                     <div className="relative h-12 w-12">
                       <Image
@@ -388,7 +417,7 @@ export function ProductsTableWithActions({
                   {[p.campaign, p.size, p.color].filter(Boolean).join(' / ') || '-'}
                 </td>
                 <td className="px-4 py-3 min-w-[6rem]">
-                  <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="badge-only" />
+                  <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="dot-only" />
                 </td>
                 {showStock && (
                   <>
@@ -406,9 +435,6 @@ export function ProductsTableWithActions({
                     <td className="px-4 py-3 text-right">{p.stock}</td>
                   </>
                 )}
-                <td className="px-4 py-3 text-right text-slate-600">
-                  {p.stock_received_at ? String(p.stock_received_at).slice(0, 10) : '-'}
-                </td>
                 <td className="px-4 py-3 text-right">¥{p.cost_yen.toLocaleString()}</td>
                 {showStock && (
                   <>
@@ -417,13 +443,7 @@ export function ProductsTableWithActions({
                     <td className={`px-4 py-3 text-right ${!hasDefaultShipping ? 'text-slate-400' : 'text-amber-700 font-medium'}`}>{hasDefaultShipping ? `¥${priceCutLoss.toLocaleString()}` : '—'}</td>
                   </>
                 )}
-                <td className="px-3 sm:px-4 py-3 flex gap-2 items-center">
-                  <Link
-                    href={`/products/${p.id}${detailQuery}`}
-                    className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-700 min-h-[44px] min-w-[4.5rem] touch-manipulation"
-                  >
-                    {showStock ? '詳細' : '詳細'}
-                  </Link>
+                <td className="px-3 sm:px-4 py-3">
                   <ProductDeleteButton
                     productId={p.id}
                     productName={p.name}
