@@ -337,7 +337,7 @@ export function ProductsTableWithActions({
             <th className="px-4 py-3 text-left text-sm font-semibold">画像</th>
             <th className="px-4 py-3 text-left text-sm font-semibold">商品名</th>
             <th className="px-4 py-3 text-left text-sm font-semibold">企画/サイズ/色</th>
-            <th className="px-4 py-3 text-left text-sm font-semibold">状態</th>
+            <th className="px-2 py-3 text-center text-sm font-semibold w-10">状態</th>
             {showStock && (
               <>
                 <th className="px-4 py-3 text-right text-sm font-semibold">家</th>
@@ -416,7 +416,7 @@ export function ProductsTableWithActions({
                 <td className="px-4 py-3 text-slate-600 text-sm">
                   {[p.campaign, p.size, p.color].filter(Boolean).join(' / ') || '-'}
                 </td>
-                <td className="px-4 py-3 min-w-[6rem]">
+                <td className="px-2 py-3 w-10 text-center">
                   <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="dot-only" />
                 </td>
                 {showStock && (
