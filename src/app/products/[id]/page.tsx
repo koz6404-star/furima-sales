@@ -94,6 +94,8 @@ export default async function ProductDetailPage({
 
   const listHref = from === 'products' ? '/products' : from === 'sold-out' ? '/products/sold-out' : from === 'by-profit' ? '/products' : (product.stock > 0 ? '/products' : '/products/sold-out');
   const backHref = returnTo || listHref;
+  const showAdSpend = (product as { platform?: string | null }).platform === 'amazon' || sales?.some((s) => (s as { ad_spend_yen?: number }).ad_spend_yen && (s as { ad_spend_yen: number }).ad_spend_yen > 0);
+  const tableColSpan = showAdSpend ? 8 : 7;
 
   return (
     <div className="min-h-screen">
@@ -112,6 +114,7 @@ export default async function ProductDetailPage({
                     alt={product.name}
                     fill
                     className="object-cover rounded-lg"
+                    unoptimized
                   />
                 </div>
               ) : (
@@ -148,6 +151,16 @@ export default async function ProductDetailPage({
                   stock={product.stock}
                   variant="full"
                 />
+                {(product as { platform?: string | null }).platform === 'amazon' && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-orange-100 text-orange-800 text-sm">
+                    Amazon
+                  </span>
+                )}
+                {(product as { asin?: string | null }).asin && (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-sm">
+                    ASIN: {(product as { asin: string }).asin}
+                  </span>
+                )}
                 {(product.sku || (product as { custom_sku?: string | null }).custom_sku || product.campaign) && (
                   <>
                   {product.sku && (
@@ -176,7 +189,11 @@ export default async function ProductDetailPage({
                 <div>
                   <span className="text-slate-500">在庫数</span>
                   <p className="font-semibold">{product.stock}</p>
-                  <p className="text-slate-600 text-xs mt-0.5">家: {stockAtHome} / 倉庫: {stockAtWarehouse}</p>
+                  {(product as { platform?: string | null }).platform === 'amazon' ? (
+                    <p className="text-slate-600 text-xs mt-0.5">FBA在庫（API同期）</p>
+                  ) : (
+                    <p className="text-slate-600 text-xs mt-0.5">家: {stockAtHome} / 倉庫: {stockAtWarehouse}</p>
+                  )}
                 </div>
                 {product.stock_received_at && (
                   <div>
@@ -197,6 +214,7 @@ export default async function ProductDetailPage({
                   <p className="font-semibold">¥{price30.toLocaleString()}</p>
                 </div>
               </div>
+              {(product as { platform?: string | null }).platform !== 'amazon' && (
               <div className="mt-4 p-4 rounded-lg bg-amber-50 border border-amber-200">
                 <DefaultShippingSelector
                   productId={product.id}
@@ -204,6 +222,7 @@ export default async function ProductDetailPage({
                   options={(shippingRates ?? []).filter((s) => s.platform === 'mercari' && !(s as { is_custom?: boolean }).is_custom).map((s) => ({ display_name: s.display_name, base_fee_yen: s.base_fee_yen }))}
                 />
               </div>
+              )}
               {setComponentNames.length > 0 && (
                 <div className="mt-3 text-sm">
                   <span className="text-slate-500">セット構成: </span>
@@ -219,7 +238,7 @@ export default async function ProductDetailPage({
           </div>
         </div>
 
-        {product.stock > 0 && (
+        {product.stock > 0 && (product as { platform?: string | null }).platform !== 'amazon' && (
           <>
             <div className="rounded-lg border border-slate-200 bg-white p-6 mb-6">
               <h2 className="font-bold text-lg mb-4">保管場所の移動</h2>
@@ -245,7 +264,7 @@ export default async function ProductDetailPage({
           </>
         )}
 
-        {product.stock === 0 && (
+        {product.stock === 0 && (product as { platform?: string | null }).platform !== 'amazon' && (
           <div className="rounded-lg border border-slate-200 bg-white p-6 mb-6">
             <h2 className="font-bold text-lg mb-4">再入荷</h2>
             <RestockForm
@@ -266,6 +285,9 @@ export default async function ProductDetailPage({
                   <th className="py-2 text-right">単価</th>
                   <th className="py-2 text-right">手数料</th>
                   <th className="py-2 text-right">送料</th>
+                  {showAdSpend ? (
+                    <th className="py-2 text-right">広告費</th>
+                  ) : null}
                   <th className="py-2 text-right">粗利</th>
                   <th className="py-2 w-24"></th>
                 </tr>
@@ -273,7 +295,7 @@ export default async function ProductDetailPage({
               <tbody>
                 {(!sales || sales.length === 0) && (
                   <tr>
-                    <td colSpan={7} className="py-4 text-center text-slate-500">
+                    <td colSpan={tableColSpan} className="py-4 text-center text-slate-500">
                       販売履歴がありません
                     </td>
                   </tr>
@@ -285,6 +307,9 @@ export default async function ProductDetailPage({
                     <td className="py-2 text-right">¥{s.unit_price_yen.toLocaleString()}</td>
                     <td className="py-2 text-right">¥{s.fee_yen.toLocaleString()}</td>
                     <td className="py-2 text-right">¥{s.shipping_yen.toLocaleString()}</td>
+                    {showAdSpend ? (
+                      <td className="py-2 text-right">¥{((s as { ad_spend_yen?: number }).ad_spend_yen ?? 0).toLocaleString()}</td>
+                    ) : null}
                     <td className="py-2 text-right">¥{s.gross_profit_yen.toLocaleString()}</td>
                     <td className="py-2">
                       <SaleRowActions
@@ -297,6 +322,7 @@ export default async function ProductDetailPage({
                         feeRates={feeRates ?? []}
                         shippingRates={shippingRates ?? []}
                         settings={settings ?? []}
+                        isAmazonSale={(product as { platform?: string | null }).platform === 'amazon' || s.platform === 'amazon'}
                       />
                     </td>
                   </tr>

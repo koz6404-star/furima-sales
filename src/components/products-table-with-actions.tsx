@@ -49,6 +49,7 @@ type Product = {
   stock_received_at?: string | null;
   oldest_received_at?: string | null;
   default_shipping_yen?: number | null;
+  platform?: string | null;
 };
 
 export function ProductsTableWithActions({
@@ -265,13 +266,18 @@ export function ProductsTableWithActions({
                   </Link>
                   {p.image_url ? (
                     <div className="relative h-16 w-16 flex-shrink-0 rounded overflow-hidden">
-                      <Image src={p.image_url} alt={p.name} fill className="object-cover" />
+                      <Image src={p.image_url} alt={p.name} fill className="object-cover" unoptimized />
                     </div>
                   ) : (
                     <div className="h-16 w-16 flex-shrink-0 bg-slate-200 rounded flex items-center justify-center text-slate-400 text-xs">画像なし</div>
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-900 line-clamp-2">{p.name}</p>
+                    <p className="font-medium text-slate-900 line-clamp-2 flex items-center gap-2 flex-wrap">
+                      {p.name}
+                      {p.platform === 'amazon' && (
+                        <span className="inline-flex px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-xs">Amazon</span>
+                      )}
+                    </p>
                     <p className="text-sm text-slate-500 mt-0.5">
                       {[p.campaign, p.size, p.color].filter(Boolean).join(' / ') || '-'}
                     </p>
@@ -279,16 +285,22 @@ export function ProductsTableWithActions({
                       <StockAgeBadge oldestReceivedAt={p.oldest_received_at} stockReceivedAt={p.stock_received_at} stock={p.stock} variant="dot-only" />
                       {showStock && (
                         <>
-                          <span className="inline-flex items-center gap-1">
-                            家: {locationStockMap[p.id]?.home ?? '-'}
-                            <LocationQuickTransfer
-                              productId={p.id}
-                              stockAtHome={locationStockMap[p.id]?.home ?? 0}
-                              stockAtWarehouse={locationStockMap[p.id]?.warehouse ?? 0}
-                            />
-                          </span>
-                          <span>倉庫: {locationStockMap[p.id]?.warehouse ?? '-'}</span>
-                          <span>在庫: {p.stock}</span>
+                          {p.platform === 'amazon' ? (
+                            <span>FBA在庫: {p.stock}</span>
+                          ) : (
+                            <>
+                              <span className="inline-flex items-center gap-1">
+                                家: {locationStockMap[p.id]?.home ?? '-'}
+                                <LocationQuickTransfer
+                                  productId={p.id}
+                                  stockAtHome={locationStockMap[p.id]?.home ?? 0}
+                                  stockAtWarehouse={locationStockMap[p.id]?.warehouse ?? 0}
+                                />
+                              </span>
+                              <span>倉庫: {locationStockMap[p.id]?.warehouse ?? '-'}</span>
+                              <span>在庫: {p.stock}</span>
+                            </>
+                          )}
                         </>
                       )}
                       <span>¥{p.cost_yen.toLocaleString()}</span>
@@ -404,6 +416,7 @@ export function ProductsTableWithActions({
                         alt={p.name}
                         fill
                         className="object-cover rounded"
+                        unoptimized
                       />
                     </div>
                   ) : (
@@ -412,7 +425,14 @@ export function ProductsTableWithActions({
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 font-medium">{p.name}</td>
+                <td className="px-4 py-3 font-medium">
+                  <span className="inline-flex items-center gap-2 flex-wrap">
+                    {p.name}
+                    {p.platform === 'amazon' && (
+                      <span className="inline-flex px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-xs">Amazon</span>
+                    )}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-slate-600 text-sm">
                   {[p.campaign, p.size, p.color].filter(Boolean).join(' / ') || '-'}
                 </td>
@@ -421,18 +441,28 @@ export function ProductsTableWithActions({
                 </td>
                 {showStock && (
                   <>
-                    <td className="px-4 py-3 text-right text-slate-600">
-                      <span className="inline-flex items-center justify-end gap-1">
-                        {locationStockMap[p.id]?.home ?? '-'}
-                        <LocationQuickTransfer
-                          productId={p.id}
-                          stockAtHome={locationStockMap[p.id]?.home ?? 0}
-                          stockAtWarehouse={locationStockMap[p.id]?.warehouse ?? 0}
-                        />
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right text-slate-600">{locationStockMap[p.id]?.warehouse ?? '-'}</td>
-                    <td className="px-4 py-3 text-right">{p.stock}</td>
+                    {p.platform === 'amazon' ? (
+                      <>
+                        <td className="px-4 py-3 text-right text-slate-400">—</td>
+                        <td className="px-4 py-3 text-right text-slate-400">—</td>
+                        <td className="px-4 py-3 text-right text-slate-600">FBA: {p.stock}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-4 py-3 text-right text-slate-600">
+                          <span className="inline-flex items-center justify-end gap-1">
+                            {locationStockMap[p.id]?.home ?? '-'}
+                            <LocationQuickTransfer
+                              productId={p.id}
+                              stockAtHome={locationStockMap[p.id]?.home ?? 0}
+                              stockAtWarehouse={locationStockMap[p.id]?.warehouse ?? 0}
+                            />
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right text-slate-600">{locationStockMap[p.id]?.warehouse ?? '-'}</td>
+                        <td className="px-4 py-3 text-right">{p.stock}</td>
+                      </>
+                    )}
                   </>
                 )}
                 <td className="px-4 py-3 text-right">¥{p.cost_yen.toLocaleString()}</td>

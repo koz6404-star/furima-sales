@@ -8,7 +8,7 @@ type Sale = {
   id: string;
   quantity: number;
   unit_price_yen: number;
-  platform: 'mercari' | 'rakuma';
+  platform: 'mercari' | 'rakuma' | 'amazon';
   fee_rate_percent: number;
   fee_yen: number;
   shipping_id: string | null;
@@ -16,6 +16,7 @@ type Sale = {
   material_yen: number | null;
   gross_profit_yen: number;
   sold_at: string;
+  ad_spend_yen?: number;
 };
 
 type FeeRate = { id: string; platform: string; rate_percent: number; rakuma_rank: number | null };
@@ -32,6 +33,7 @@ export function SaleRowActions({
   feeRates,
   shippingRates,
   settings,
+  isAmazonSale = false,
 }: {
   sale: Sale;
   productId: string;
@@ -42,12 +44,15 @@ export function SaleRowActions({
   feeRates: FeeRate[];
   shippingRates: ShippingRate[];
   settings: Setting[];
+  isAmazonSale?: boolean;
 }) {
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
 
   return (
     <>
       <span className="inline-flex items-center gap-2">
+        {!isAmazonSale && (
+          <>
         <button
           type="button"
           onClick={() => setEditingSale(sale)}
@@ -63,6 +68,9 @@ export function SaleRowActions({
           stockAtHome={stockAtHome}
           stockAtWarehouse={stockAtWarehouse}
         />
+          </>
+        )}
+        {isAmazonSale && <span className="text-slate-400 text-xs">API同期</span>}
       </span>
       {editingSale && (
         <SaleEditModal
