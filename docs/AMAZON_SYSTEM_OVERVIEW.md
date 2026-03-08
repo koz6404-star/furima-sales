@@ -54,7 +54,8 @@ FBA に在庫があるがまだ1件も売れていないSKUは、`products` に�
    これにより「売れていないがFBAに在庫がある商品」も商品一覧に表示される。
 
 2. **FBA API レスポンスのパース強化**:  
-   `inventoryDetails.fulfillableQuantity` を参照するように変更。`productName` を取得して新規商品の名前に使用。
+   `payload` / 直下の複数パスから `inventorySummaries` を取得。`inventoryDetails.fulfillableQuantity`、`productName` を参照。
 
-3. **在庫0のFBA SKUは新規作成しない**:  
-   在庫がある（qty > 0）場合のみ新規商品を作成。在庫0は既存更新のみ。
+3. **Finances API breakdowns のネスト対応**:  
+   `Sales` → `Product Charges` → `Principle`、`Expenses` 配下など、再帰的に手数料・送料・広告費を集計。  
+   既存売上についても、同期時に手数料・送料を上書き更新するように変更。

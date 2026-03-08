@@ -71,7 +71,8 @@ function findSku(contexts?: Array<{ sku?: string }>): string | null {
   return null;
 }
 
-function getFeeBreakdown(breakdowns?: Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number } }>): {
+/** ネストした breakdowns を再帰的に走査して手数料・広告・送料を集計 */
+function getFeeBreakdown(breakdowns: unknown): {
   feeYen: number;
   adSpendYen: number;
   shippingYen: number;
@@ -79,21 +80,40 @@ function getFeeBreakdown(breakdowns?: Array<{ breakdownType?: string; breakdownA
   let feeYen = 0;
   let adSpendYen = 0;
   let shippingYen = 0;
-  if (!breakdowns) return { feeYen, adSpendYen, shippingYen };
-  for (const b of breakdowns) {
-    const amt = parseAmount(b.breakdownAmount);
-    const absAmt = Math.abs(amt);
-    const type = (b.breakdownType || '').toLowerCase();
-    if (type.includes('commission') || type.includes('referral') || type.includes('fba') || type.includes('variable') || type.includes('closing') || type.includes('fixed') || type.includes('commission')) {
-      feeYen += absAmt;
-    } else if (type.includes('ad') || type.includes('advertising') || type.includes('sponsored') || type.includes('ppc')) {
-      adSpendYen += absAmt;
-    } else if (type.includes('shipping') || type.includes('fulfillment') || type.includes('配送')) {
-      shippingYen += absAmt;
-    } else if (!type.includes('principal') && !type.includes('product') && type.length > 0) {
-      feeYen += absAmt;
+  const arr: Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number }; breakdowns?: unknown }> = [];
+  if (Array.isArray(breakdowns)) {
+    arr.push(...breakdowns);
+  } else if (breakdowns && typeof breakdowns === 'object' && 'breakdowns' in breakdowns) {
+    const inner = (breakdowns as { breakdowns?: unknown }).breakdowns;
+    if (Array.isArray(inner)) arr.push(...inner);
+  }
+  function process(list: Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number }; breakdowns?: unknown }>) {
+    for (const b of list) {
+      const amt = parseAmount(b.breakdownAmount);
+      const absAmt = Math.abs(amt);
+      const type = (b.breakdownType || '').toLowerCase();
+      // 子 breakdowns を先に再帰処理
+      if (b.breakdowns && Array.isArray(b.breakdowns)) {
+        process(b.breakdowns as Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number }; breakdowns?: unknown }>);
+      }
+      // 親カテゴリ（Sales, Product Charges, Expenses）は金額を足さずスキップ
+      if (type.includes('sales') || type.includes('product charges') || type.includes('expenses')) continue;
+      if (type.includes('principal') || type.includes('principle')) continue; // 売上本体
+      if (type.includes('commission') || type.includes('referral') || type.includes('variable') || type.includes('closing') || type.includes('fixed')) {
+        feeYen += absAmt;
+      } else if (type.includes('fba') || (type.includes('fee') && !type.includes('ad'))) {
+        feeYen += absAmt;
+      } else if (type.includes('ad') || type.includes('advertising') || type.includes('sponsored') || type.includes('ppc')) {
+        adSpendYen += absAmt;
+      } else if (type.includes('shipping') || type.includes('fulfillment') || type.includes('配送')) {
+        shippingYen += absAmt;
+      } else if (type.length > 0 && absAmt > 0) {
+        // その他は手数料として扱う（Amazon の費用種別は多岐にわたるため）
+        feeYen += absAmt;
+      }
     }
   }
+  process(arr);
   return { feeYen, adSpendYen, shippingYen };
 }
 
@@ -242,13 +262,30 @@ export async function POST(req: Request) {
       if (r.orderId) orderIds.add(r.orderId);
 
       if (r.orderId) {
-        const { data: dupCheck } = await supabase
+        const { data: dupList } = await supabase
           .from('sales')
-          .select('id')
+          .select('id, product_id, quantity')
           .eq('user_id', user.id)
-          .eq('amazon_order_id', r.orderId)
-          .limit(1);
-        if (dupCheck && dupCheck.length > 0) continue;
+          .eq('amazon_order_id', r.orderId);
+        const dupCheck = dupList?.length === 1 ? dupList[0] : null;
+        if (dupCheck) {
+          // 既存売上1件のみ：手数料・送料を再取得で上書き更新
+          const { data: prod } = await supabase.from('products').select('cost_yen').eq('id', dupCheck.product_id).single();
+          const costYen = prod?.cost_yen ?? 0;
+          const grossProfit = (r.unitPrice - r.feeYen - r.adSpendYen - r.shippingYen - costYen) * r.quantity;
+          await supabase.from('sales').update({
+            fee_yen: r.feeYen * r.quantity,
+            shipping_yen: r.shippingYen * r.quantity,
+            ad_spend_yen: r.adSpendYen * r.quantity,
+            gross_profit_yen: grossProfit,
+            unit_price_yen: r.unitPrice,
+            quantity: r.quantity,
+            updated_at: new Date().toISOString(),
+          }).eq('id', dupCheck.id);
+          synced.push(saleKey);
+          if (r.orderId) orderIds.add(r.orderId);
+          continue;
+        }
       } else {
         const { data: dupCheck } = await supabase
           .from('sales')
@@ -357,22 +394,22 @@ export async function POST(req: Request) {
             details: true,
             ...(nextToken && { nextToken }),
           },
-        }) as {
-          inventorySummaries?: Array<{
-            sellerSku?: string;
-            SellerSku?: string;
-            fulfillableQuantity?: number;
-            FulfillableQuantity?: number;
-            totalQuantity?: number;
-            TotalQuantity?: number;
-            productName?: string;
-            ProductName?: string;
-            inventoryDetails?: { fulfillableQuantity?: number };
-          }>;
-          nextToken?: string;
-        };
-        const summaries = fbaRes?.inventorySummaries ?? [];
-        nextToken = fbaRes?.nextToken;
+        });
+        // レスポンスは payload 経由や pagination マージで返る場合がある
+        const rawRes = fbaRes as Record<string, unknown>;
+        const fbaPayload = (rawRes?.payload as Record<string, unknown>) ?? rawRes;
+        const summaries = (fbaRes?.inventorySummaries ?? fbaPayload?.inventorySummaries ?? rawRes?.inventorySummaries ?? []) as Array<{
+          sellerSku?: string;
+          SellerSku?: string;
+          fulfillableQuantity?: number;
+          FulfillableQuantity?: number;
+          totalQuantity?: number;
+          TotalQuantity?: number;
+          productName?: string;
+          ProductName?: string;
+          inventoryDetails?: { fulfillableQuantity?: number };
+        }>;
+        nextToken = (fbaRes?.nextToken ?? fbaPayload?.nextToken ?? rawRes?.nextToken) as string | undefined;
         for (const s of summaries) {
           const sku = s.sellerSku ?? (s as { SellerSku?: string }).SellerSku;
           if (sku) {
