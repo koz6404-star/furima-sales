@@ -179,6 +179,8 @@ AMAZON_SELLER_ID=A1XX22YY33ZZ44
 | 「Access to requested resource is denied」 | 財務会計ロール未承認、またはリフレッシュトークンが無効 |
 | 「Invalid refresh token」 | リフレッシュトークンの再取得（3章をやり直し） |
 | 同期は動くがデータが0件 | 対象期間に Shipment トランザクションがない、またはマーケットプレイスが日本（A1VC38T7YXB528）でない |
+| **FBA在庫が反映されない** | SPPで「**在庫と注文の追跡（Inventory and Order Tracking）**」ロールが承認済みか確認。同期後に表示される「※FBA在庫APIが拒否されました」の有無を確認 |
+| **手数料・送料が0円のまま** | 初回同期後、再度「Amazon同期」を実行。既存売上は再実行時に手数料・送料が上書き更新されます |
 
 ---
 

@@ -230,10 +230,20 @@ export async function POST(req: Request) {
             description: (tx as { description?: string }).description || 'Order Payment',
           });
         } else {
+          // item.breakdowns が null の場合がある（GitHub #4993）。トランザクション階層の breakdowns をフォールバック
+          const txBreakdowns = (tx as { breakdowns?: unknown }).breakdowns;
           for (const item of items) {
             const totalAmount = parseAmount(item.totalAmount);
-            const { feeYen, adSpendYen, shippingYen } = getFeeBreakdown(item.breakdowns);
-            const quantity = item.contexts?.[0]?.quantityShipped ?? 1;
+            const itemBd = item.breakdowns ?? (items.length === 1 ? txBreakdowns : null);
+            let { feeYen, adSpendYen, shippingYen } = getFeeBreakdown(itemBd);
+            // トランザクション階層のみで複数itemの場合は按分
+            if (items.length > 1 && (feeYen === 0 && adSpendYen === 0 && shippingYen === 0) && txBreakdowns) {
+              const txFee = getFeeBreakdown(txBreakdowns);
+              feeYen = Math.round(txFee.feeYen / items.length);
+              adSpendYen = Math.round(txFee.adSpendYen / items.length);
+              shippingYen = Math.round(txFee.shippingYen / items.length);
+            }
+            const quantity = (item.contexts as Array<{ quantityShipped?: number }> | undefined)?.find((c) => c.quantityShipped != null)?.quantityShipped ?? item.contexts?.[0]?.quantityShipped ?? 1;
             const unitPrice = quantity > 0 ? Math.round((totalAmount + feeYen + adSpendYen + shippingYen) / quantity) : totalAmount;
             results.push({
               orderId,
@@ -374,6 +384,7 @@ export async function POST(req: Request) {
     // FBM取得に必要な sellerId は環境変数 AMAZON_SELLER_ID で指定（Seller Central の商取引アカウント ID）
     const sellerId = process.env.AMAZON_SELLER_ID?.trim();
     let inventoryUpdated = 0;
+    let fbaSkusFound = 0;
     try {
       // sellerId が無くても FBA 在庫は取得可能（getInventorySummaries は sellerId 不要）
       const hasSellerIdForFbm = !!sellerId;
@@ -398,7 +409,7 @@ export async function POST(req: Request) {
         // レスポンスは payload 経由や pagination マージで返る場合がある
         const rawRes = fbaRes as Record<string, unknown>;
         const fbaPayload = (rawRes?.payload as Record<string, unknown>) ?? rawRes;
-        const summaries = (fbaRes?.inventorySummaries ?? fbaPayload?.inventorySummaries ?? rawRes?.inventorySummaries ?? []) as Array<{
+        const summaries = (fbaRes?.inventorySummaries ?? fbaPayload?.inventorySummaries ?? rawRes?.inventorySummaries ?? rawRes?.InventorySummaries ?? []) as Array<{
           sellerSku?: string;
           SellerSku?: string;
           fulfillableQuantity?: number;
@@ -423,6 +434,7 @@ export async function POST(req: Request) {
           }
         }
       } while (nextToken);
+      fbaSkusFound = fbaMap.size;
 
       // FBAに在庫がありproductsに無いSKU → 新規商品作成（売上なしでも出品中商品を一覧に表示するため）
       const existingSkuSet = new Set<string>();
@@ -526,8 +538,18 @@ export async function POST(req: Request) {
         }
       }
     } catch (invErr) {
+      const invErrMsg = (invErr as Error)?.message ?? String(invErr);
       console.warn('Amazon inventory sync warning:', invErr);
-      // 売上同期は成功しているので在庫のみ部分失敗として続行
+      // 診断用: FBA APIエラー時はレスポンスに含める（403=ロール不足、スニペット参照）
+      return NextResponse.json({
+        ok: true,
+        transactionsFound: results.length,
+        synced: synced.length,
+        inventoryUpdated,
+        inventoryError: invErrMsg.includes('Access') || invErrMsg.includes('denied') || invErrMsg.includes('403')
+          ? 'FBA在庫APIが拒否されました。SPPで「在庫と注文の追跡」ロールが承認済みか確認してください。'
+          : invErrMsg,
+      });
     }
 
     return NextResponse.json({
@@ -535,6 +557,7 @@ export async function POST(req: Request) {
       transactionsFound: results.length,
       synced: synced.length,
       inventoryUpdated,
+      fbaSkusFound,
     });
   } catch (e) {
     const err = e as Error & { response?: { body?: string }; errors?: Array<{ message?: string }> };

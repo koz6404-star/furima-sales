@@ -19,7 +19,14 @@ export function AmazonSyncButton() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '同期に失敗しました');
-      setMessage(`取得: ${data.transactionsFound ?? 0}件、登録: ${data.synced ?? 0}件`);
+      const inv = data.inventoryUpdated ?? 0;
+      const fbaSkus = data.fbaSkusFound ?? 0;
+      const invErr = data.inventoryError;
+      let msg = `取得: ${data.transactionsFound ?? 0}件、登録: ${data.synced ?? 0}件`;
+      if (inv > 0) msg += `、在庫更新: ${inv}件`;
+      if (fbaSkus > 0) msg += `（FBA SKU: ${fbaSkus}件）`;
+      if (invErr) msg += ` ※${invErr}`;
+      setMessage(msg);
       router.refresh();
     } catch (e) {
       setMessage(e instanceof Error ? e.message : 'エラーが発生しました');
