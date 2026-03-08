@@ -40,15 +40,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function parseAmount(val: { currencyAmount?: number } | undefined): number {
-  if (!val || val.currencyAmount == null) return 0;
-  return Math.round(val.currencyAmount);
+function parseAmount(val: { currencyAmount?: number; CurrencyAmount?: number } | undefined): number {
+  if (!val) return 0;
+  const amt = val.currencyAmount ?? val.CurrencyAmount;
+  if (amt == null) return 0;
+  return Math.round(amt);
 }
 
-function findOrderId(related?: Array<{ relatedIdentifierName?: string; relatedIdentifierValue?: string }>): string | null {
+function findOrderId(related?: Array<{ relatedIdentifierName?: string; relatedIdentifierValue?: string; RelatedIdentifierName?: string; RelatedIdentifierValue?: string }>): string | null {
   if (!related) return null;
-  const o = related.find((r) => r.relatedIdentifierName === 'ORDER_ID');
-  return o?.relatedIdentifierValue ?? null;
+  const o = related.find((r) => (r.relatedIdentifierName ?? r.RelatedIdentifierName) === 'ORDER_ID');
+  return (o?.relatedIdentifierValue ?? o?.RelatedIdentifierValue) ?? null;
 }
 
 function findAsin(contexts?: Array<{ asin?: string }>): string | null {
@@ -152,14 +154,18 @@ export async function POST(req: Request) {
           options: { version: '2024-06-19' as const },
         });
 
-        const payload = res?.payload as { transactions?: unknown[]; nextToken?: string } | undefined;
-        const transactions = payload?.transactions ?? [];
-        nextToken = payload?.nextToken;
+        // amazon-sp-api は json_res.payload を返す → res = { transactions, nextToken }
+        const data = res as { transactions?: unknown[]; Transactions?: unknown[]; nextToken?: string; NextToken?: string };
+        const txs = data.transactions ?? data.Transactions;
+        const transactions = Array.isArray(txs) ? txs : [];
+        nextToken = data.nextToken ?? data.NextToken;
 
         for (const tx of transactions as Array<{
         transactionType?: string;
+        TransactionType?: string;
         relatedIdentifiers?: Array<{ relatedIdentifierName?: string; relatedIdentifierValue?: string }>;
-        totalAmount?: { currencyAmount?: number };
+        RelatedIdentifiers?: Array<{ RelatedIdentifierName?: string; RelatedIdentifierValue?: string }>;
+        totalAmount?: { currencyAmount?: number; CurrencyAmount?: number };
         items?: Array<{
           description?: string;
           totalAmount?: { currencyAmount?: number };
@@ -167,11 +173,15 @@ export async function POST(req: Request) {
           contexts?: Array<{ asin?: string; sku?: string; quantityShipped?: number }>;
         }>;
         postedDate?: string;
+        PostedDate?: string;
         breakdowns?: Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number } }>;
       }>) {
-        if (tx.transactionType !== 'Shipment') continue;
-        const orderId = findOrderId(tx.relatedIdentifiers);
-        const postedDate = tx.postedDate ? toYMD(new Date(tx.postedDate)) : toYMD(new Date());
+        const txType = tx.transactionType ?? tx.TransactionType ?? '';
+        if (txType !== 'Shipment' && txType !== 'shipment') continue;
+        const related = (tx as { relatedIdentifiers?: unknown[]; RelatedIdentifiers?: unknown[] }).relatedIdentifiers ?? (tx as { RelatedIdentifiers?: unknown[] }).RelatedIdentifiers;
+        const orderId = findOrderId(related as Array<{ relatedIdentifierName?: string; relatedIdentifierValue?: string; RelatedIdentifierName?: string; RelatedIdentifierValue?: string }>);
+        const postDate = tx.postedDate ?? (tx as { PostedDate?: string }).PostedDate;
+        const postedDate = postDate ? toYMD(new Date(postDate)) : toYMD(new Date());
 
         const items = tx.items ?? [];
         if (items.length === 0) {
