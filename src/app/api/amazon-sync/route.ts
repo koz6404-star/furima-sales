@@ -10,6 +10,8 @@ import { createSpApiClient, JAPAN_MARKETPLACE } from '@/lib/amazon-sp-api';
 const SYNC_DAYS = 90;
 // APIは1リクエスト最大180日。これより長い期間はチャンク分割する
 const MAX_DAYS_PER_REQUEST = 180;
+// API仕様: postedAfter/postedBefore はリクエスト時刻の2分以上前である必要がある
+const API_TIME_OFFSET_MS = 3 * 60 * 1000;
 
 function toYMD(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -22,7 +24,7 @@ function toISO(d: Date): string {
 /** 開始日から今日までを MAX_DAYS_PER_REQUEST 日ずつのチャンクに分割 */
 function buildChunks(fromDate: Date): Array<{ postedAfter: Date; postedBefore: Date }> {
   const chunks: Array<{ postedAfter: Date; postedBefore: Date }> = [];
-  const now = new Date();
+  const now = new Date(Date.now() - API_TIME_OFFSET_MS);
   let cur = new Date(fromDate);
   while (cur < now) {
     const end = new Date(cur);
@@ -108,10 +110,11 @@ export async function POST(req: Request) {
 
     const spClient = createSpApiClient();
 
+    const apiNow = new Date(Date.now() - API_TIME_OFFSET_MS);
     const chunks =
       fromDate != null
         ? buildChunks(fromDate)
-        : [{ postedAfter: new Date(Date.now() - SYNC_DAYS * 864e5), postedBefore: new Date() }];
+        : [{ postedAfter: new Date(apiNow.getTime() - SYNC_DAYS * 864e5), postedBefore: apiNow }];
 
     const results: Array<{
       orderId: string | null;
