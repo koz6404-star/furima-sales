@@ -365,6 +365,9 @@ export async function POST(req: Request) {
             FulfillableQuantity?: number;
             totalQuantity?: number;
             TotalQuantity?: number;
+            productName?: string;
+            ProductName?: string;
+            inventoryDetails?: { fulfillableQuantity?: number };
           }>;
           nextToken?: string;
         };
@@ -373,12 +376,12 @@ export async function POST(req: Request) {
         for (const s of summaries) {
           const sku = s.sellerSku ?? (s as { SellerSku?: string }).SellerSku;
           if (sku) {
-            const details = s.inventoryDetails ?? (s as { inventoryDetails?: { fulfillableQuantity?: number } }).inventoryDetails;
+            const details = s.inventoryDetails;
             const qty =
               s.fulfillableQuantity ?? (s as { FulfillableQuantity?: number }).FulfillableQuantity ??
               details?.fulfillableQuantity ??
               s.totalQuantity ?? (s as { TotalQuantity?: number }).TotalQuantity ?? 0;
-            const productName = s.productName ?? (s as { productName?: string }).ProductName ?? `Amazon ${sku}`;
+            const productName = s.productName ?? s.ProductName ?? `Amazon ${sku}`;
             fbaMap.set(sku, { qty, productName });
           }
         }
