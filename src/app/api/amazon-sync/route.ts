@@ -10,8 +10,8 @@ import { createSpApiClient, JAPAN_MARKETPLACE } from '@/lib/amazon-sp-api';
 const SYNC_DAYS = 90;
 // APIは1リクエスト最大180日。これより長い期間はチャンク分割する
 const MAX_DAYS_PER_REQUEST = 180;
-// API仕様: postedAfter/postedBefore はリクエスト時刻の2分以上前である必要がある
-const API_TIME_OFFSET_MS = 3 * 60 * 1000;
+// API仕様: postedAfter/postedBefore はリクエスト時刻の2分以上前である必要がある（余裕を持って10分）
+const API_TIME_OFFSET_MS = 10 * 60 * 1000;
 
 function toYMD(d: Date): string {
   return d.toISOString().slice(0, 10);
