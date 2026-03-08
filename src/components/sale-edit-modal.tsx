@@ -10,7 +10,7 @@ type Sale = {
   id: string;
   quantity: number;
   unit_price_yen: number;
-  platform: 'mercari' | 'rakuma';
+  platform: 'mercari' | 'rakuma' | 'amazon';
   fee_rate_percent: number;
   fee_yen: number;
   shipping_id: string | null;
@@ -55,7 +55,7 @@ export function SaleEditModal({
 
   const [quantity, setQuantity] = useState(String(sale.quantity));
   const [unitPrice, setUnitPrice] = useState(String(sale.unit_price_yen));
-  const [platform, setPlatform] = useState<'mercari' | 'rakuma'>(sale.platform);
+  const [platform, setPlatform] = useState<'mercari' | 'rakuma' | 'amazon'>(sale.platform);
   const [shippingId, setShippingId] = useState(sale.shipping_id ?? (customShipping?.id ?? ''));
   const [customShippingYen, setCustomShippingYen] = useState(
     isCustomShipping || !sale.shipping_id ? String(sale.shipping_yen) : ''

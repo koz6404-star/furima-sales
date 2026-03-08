@@ -2,7 +2,9 @@
   "name": "furima-sales",
   "version": "0.1.0",
   "private": true,
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -17,6 +19,7 @@
   "dependencies": {
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.98.0",
+    "amazon-sp-api": "^1.2.0",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
     "next": "16.1.6",

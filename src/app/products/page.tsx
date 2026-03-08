@@ -5,6 +5,7 @@ import { Suspense } from 'react';
 import { Nav } from '@/components/nav';
 import { ProductSearchBar } from '@/components/product-search-bar';
 import { ProductsTableWithActions } from '@/components/products-table-with-actions';
+import { AmazonSyncButton } from '@/components/amazon-sync-button';
 import { getOrderForSort } from '@/lib/product-sort';
 import type { SortOption } from '@/components/product-search-bar';
 
@@ -152,6 +153,7 @@ export default async function ProductsPage({
                 <ProductSearchBar basePath="/products" />
               </Suspense>
             </div>
+            <AmazonSyncButton />
             <Link
               href="/products/new"
               className="rounded bg-emerald-600 px-4 py-2 text-white font-medium hover:bg-emerald-700 whitespace-nowrap"
