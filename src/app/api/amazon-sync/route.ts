@@ -137,15 +137,18 @@ export async function POST(req: Request) {
       let nextToken: string | undefined;
 
       do {
+        // 最終チャンクは postedBefore を省略→API がリクエスト受信時の2分前を自動設定（日時制約エラー回避）
+        const isLastChunk = c === chunks.length - 1;
+        const query: Record<string, string> = {
+          postedAfter: PostedAfter,
+          marketplaceId: JAPAN_MARKETPLACE,
+          ...(nextToken && { nextToken }),
+          ...(!isLastChunk && { postedBefore: PostedBefore }),
+        };
         const res = await spClient.callAPI({
           operation: 'listTransactions',
           endpoint: 'finances',
-          query: {
-            postedAfter: PostedAfter,
-            postedBefore: PostedBefore,
-            marketplaceId: JAPAN_MARKETPLACE,
-            ...(nextToken && { nextToken }),
-          },
+          query,
           options: { version: '2024-06-19' as const },
         });
 
@@ -311,7 +314,15 @@ export async function POST(req: Request) {
       synced: synced.length,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    const err = e as Error & { response?: { body?: string }; errors?: Array<{ message?: string }> };
+    let msg = err?.message ?? String(e);
+    try {
+      const body = err?.response?.body ? JSON.parse(err.response.body) : err;
+      const apiMsg = body?.errors?.[0]?.message ?? body?.message;
+      if (apiMsg) msg = apiMsg;
+    } catch {
+      //
+    }
     console.error('Amazon sync error:', msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
