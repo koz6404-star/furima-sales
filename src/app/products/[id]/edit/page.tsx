@@ -17,7 +17,9 @@ export default function ProductEditPage() {
   const [color, setColor] = useState('');
   const [memo, setMemo] = useState('');
   const [stockReceivedAt, setStockReceivedAt] = useState('');
+  const [costYen, setCostYen] = useState<string>('');
   const [defaultShippingYen, setDefaultShippingYen] = useState<string>('');
+  const [platform, setPlatform] = useState<string>('');
   const [shippingOptions, setShippingOptions] = useState<{ display_name: string; base_fee_yen: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -44,7 +46,7 @@ export default function ProductEditPage() {
 
       const { data, error: fetchError } = await supabase
         .from('products')
-        .select('name, sku, sku_locked, custom_sku, campaign, size, color, memo, stock_received_at, default_shipping_yen')
+        .select('name, sku, sku_locked, custom_sku, campaign, size, color, memo, stock_received_at, cost_yen, default_shipping_yen, platform')
         .eq('id', id)
         .eq('user_id', user.id)
         .single();
@@ -62,7 +64,9 @@ export default function ProductEditPage() {
       setColor(data.color || '');
       setMemo(data.memo || '');
       setStockReceivedAt(data.stock_received_at ? String(data.stock_received_at).slice(0, 10) : '');
+      setCostYen(data.cost_yen != null ? String(data.cost_yen) : '');
       setDefaultShippingYen(data.default_shipping_yen != null ? String(data.default_shipping_yen) : '');
+      setPlatform((data as { platform?: string }).platform ?? '');
       setLoading(false);
     })();
   }, [id, supabase, router]);
@@ -84,6 +88,7 @@ export default function ProductEditPage() {
       color: color.trim() || null,
       memo: memo.trim() || null,
       stock_received_at: stockReceivedAt.trim() || null,
+      cost_yen: costYen ? parseInt(costYen, 10) : 0,
       default_shipping_yen: defaultShippingYen ? parseInt(defaultShippingYen, 10) : null,
       custom_sku: customSku.trim() || null,
       updated_at: new Date().toISOString(),
@@ -96,11 +101,28 @@ export default function ProductEditPage() {
       .update(updateData)
       .eq('id', id)
       .eq('user_id', user.id);
-    setSaving(false);
     if (updateError) {
+      setSaving(false);
       setError(updateError.message);
       return;
     }
+
+    // Amazon商品の原価変更時、該当売上の粗利を再計算
+    const newCostYen = costYen ? parseInt(costYen, 10) : 0;
+    if (platform === 'amazon' && newCostYen >= 0) {
+      const { data: amazonSales } = await supabase
+        .from('sales')
+        .select('id, quantity, unit_price_yen, fee_yen, shipping_yen, ad_spend_yen')
+        .eq('product_id', id)
+        .eq('platform', 'amazon');
+      if (amazonSales?.length) {
+        for (const s of amazonSales) {
+          const gross = (s.unit_price_yen * s.quantity) - (s.fee_yen ?? 0) - (s.shipping_yen ?? 0) - ((s as { ad_spend_yen?: number }).ad_spend_yen ?? 0) - newCostYen * s.quantity;
+          await supabase.from('sales').update({ gross_profit_yen: gross }).eq('id', s.id);
+        }
+      }
+    }
+    setSaving(false);
     router.push(`/products/${id}`);
     router.refresh();
   };
@@ -170,6 +192,20 @@ export default function ProductEditPage() {
               onChange={(e) => setCustomSku(e.target.value)}
               className="w-full rounded border border-slate-300 px-3 py-2"
               placeholder="例: A-001"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">原価（円）*</label>
+            <p className="text-xs text-slate-500 mb-1">
+              {platform === 'amazon' ? 'Amazon同期商品の粗利計算に使用。設定後、該当売上の粗利が再計算されます。' : '利益・目安価格の計算に使用'}
+            </p>
+            <input
+              type="number"
+              min={0}
+              value={costYen}
+              onChange={(e) => setCostYen(e.target.value)}
+              className="w-full rounded border border-slate-300 px-3 py-2"
+              placeholder="0"
             />
           </div>
           <div className="grid grid-cols-3 gap-4">

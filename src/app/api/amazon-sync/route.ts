@@ -1,6 +1,8 @@
 /**
  * Amazon SP-API 同期
- * Finances API から売上・手数料を取得し、products/sales に反映
+ * - Finances API: 売上・手数料を取得し products/sales に反映
+ * - FBA Inventory API: FBA在庫をSKUベースで取得
+ * - Listings API: FBM在庫を fulfillmentAvailability で取得
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
@@ -72,21 +74,27 @@ function findSku(contexts?: Array<{ sku?: string }>): string | null {
 function getFeeBreakdown(breakdowns?: Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number } }>): {
   feeYen: number;
   adSpendYen: number;
+  shippingYen: number;
 } {
   let feeYen = 0;
   let adSpendYen = 0;
-  if (!breakdowns) return { feeYen, adSpendYen };
+  let shippingYen = 0;
+  if (!breakdowns) return { feeYen, adSpendYen, shippingYen };
   for (const b of breakdowns) {
     const amt = parseAmount(b.breakdownAmount);
+    const absAmt = Math.abs(amt);
     const type = (b.breakdownType || '').toLowerCase();
-    if (type.includes('commission') || type.includes('referral') || type.includes('fba') || type.includes('variable')) {
-      feeYen += amt;
-    }
-    if (type.includes('ad') || type.includes('advertising') || type.includes('sponsored')) {
-      adSpendYen += amt;
+    if (type.includes('commission') || type.includes('referral') || type.includes('fba') || type.includes('variable') || type.includes('closing') || type.includes('fixed') || type.includes('commission')) {
+      feeYen += absAmt;
+    } else if (type.includes('ad') || type.includes('advertising') || type.includes('sponsored') || type.includes('ppc')) {
+      adSpendYen += absAmt;
+    } else if (type.includes('shipping') || type.includes('fulfillment') || type.includes('配送')) {
+      shippingYen += absAmt;
+    } else if (!type.includes('principal') && !type.includes('product') && type.length > 0) {
+      feeYen += absAmt;
     }
   }
-  return { feeYen, adSpendYen };
+  return { feeYen, adSpendYen, shippingYen };
 }
 
 export async function POST(req: Request) {
@@ -125,6 +133,7 @@ export async function POST(req: Request) {
       unitPrice: number;
       feeYen: number;
       adSpendYen: number;
+      shippingYen: number;
       quantity: number;
       postedDate: string;
       description: string;
@@ -186,8 +195,8 @@ export async function POST(req: Request) {
         const items = tx.items ?? [];
         if (items.length === 0) {
           const totalAmount = parseAmount(tx.totalAmount);
-          const { feeYen, adSpendYen } = getFeeBreakdown(tx.breakdowns);
-          const unitPrice = totalAmount + feeYen + adSpendYen;
+          const { feeYen, adSpendYen, shippingYen } = getFeeBreakdown(tx.breakdowns);
+          const unitPrice = totalAmount + feeYen + adSpendYen + shippingYen;
           results.push({
             orderId,
             asin: findAsin(tx.items?.flatMap((i) => i.contexts ?? []) as Array<{ asin?: string }>),
@@ -195,6 +204,7 @@ export async function POST(req: Request) {
             unitPrice,
             feeYen,
             adSpendYen,
+            shippingYen,
             quantity: 1,
             postedDate,
             description: (tx as { description?: string }).description || 'Order Payment',
@@ -202,9 +212,9 @@ export async function POST(req: Request) {
         } else {
           for (const item of items) {
             const totalAmount = parseAmount(item.totalAmount);
-            const { feeYen, adSpendYen } = getFeeBreakdown(item.breakdowns);
+            const { feeYen, adSpendYen, shippingYen } = getFeeBreakdown(item.breakdowns);
             const quantity = item.contexts?.[0]?.quantityShipped ?? 1;
-            const unitPrice = quantity > 0 ? Math.round((totalAmount + feeYen + adSpendYen) / quantity) : totalAmount;
+            const unitPrice = quantity > 0 ? Math.round((totalAmount + feeYen + adSpendYen + shippingYen) / quantity) : totalAmount;
             results.push({
               orderId,
               asin: item.contexts?.find((c) => c.asin)?.asin ?? null,
@@ -212,6 +222,7 @@ export async function POST(req: Request) {
               unitPrice,
               feeYen: Math.round(feeYen / quantity) || 0,
               adSpendYen: Math.round(adSpendYen / quantity) || 0,
+              shippingYen: Math.round(shippingYen / quantity) || 0,
               quantity,
               postedDate,
               description: item.description || 'Order Payment',
@@ -260,13 +271,15 @@ export async function POST(req: Request) {
         orClause
           ? await supabase
               .from('products')
-              .select('id')
+              .select('id, cost_yen')
               .eq('user_id', user.id)
               .eq('platform', 'amazon')
               .or(orClause)
               .limit(1)
               .maybeSingle()
           : { data: null };
+
+      const costYen = existingProduct?.cost_yen ?? 0;
 
       if (existingProduct) {
         productId = existingProduct.id;
@@ -299,7 +312,9 @@ export async function POST(req: Request) {
         }
       }
 
-      const grossProfit = r.unitPrice - r.feeYen - r.adSpendYen;
+      const grossProfit = (r.unitPrice - r.feeYen - r.adSpendYen - r.shippingYen - costYen) * r.quantity;
+      const totalFeeYen = r.feeYen * r.quantity;
+      const totalShippingYen = r.shippingYen * r.quantity;
       const { error: saleErr } = await supabase.from('sales').insert({
         user_id: user.id,
         product_id: productId,
@@ -307,21 +322,179 @@ export async function POST(req: Request) {
         unit_price_yen: r.unitPrice,
         platform: 'amazon',
         fee_rate_percent: 0,
-        fee_yen: r.feeYen,
-        shipping_yen: 0,
+        fee_yen: totalFeeYen,
+        shipping_yen: totalShippingYen,
         gross_profit_yen: grossProfit,
         sold_at: r.postedDate,
-        ad_spend_yen: r.adSpendYen,
+        ad_spend_yen: r.adSpendYen * r.quantity,
         amazon_order_id: r.orderId ?? undefined,
       });
 
       if (!saleErr) synced.push(saleKey);
     }
 
+    // --- 在庫同期: FBA + FBM を SKU ベースで反映 ---
+    // FBM取得に必要な sellerId は環境変数 AMAZON_SELLER_ID で指定（Seller Central の商取引アカウント ID）
+    const sellerId = process.env.AMAZON_SELLER_ID?.trim();
+    let inventoryUpdated = 0;
+    try {
+      // sellerId が無くても FBA 在庫は取得可能（getInventorySummaries は sellerId 不要）
+      const hasSellerIdForFbm = !!sellerId;
+
+      const fbaMap = new Map<string, { qty: number; productName: string }>();
+
+      // FBA在庫取得（getInventorySummaries）
+      let nextToken: string | undefined;
+      do {
+        if (fbaMap.size > 0) await sleep(2100); // 0.5 req/sec
+        const fbaRes = await spClient.callAPI({
+          operation: 'getInventorySummaries',
+          endpoint: 'fbaInventory',
+          query: {
+            granularityType: 'Marketplace',
+            granularityId: JAPAN_MARKETPLACE,
+            marketplaceIds: [JAPAN_MARKETPLACE],
+            details: true,
+            ...(nextToken && { nextToken }),
+          },
+        }) as {
+          inventorySummaries?: Array<{
+            sellerSku?: string;
+            SellerSku?: string;
+            fulfillableQuantity?: number;
+            FulfillableQuantity?: number;
+            totalQuantity?: number;
+            TotalQuantity?: number;
+          }>;
+          nextToken?: string;
+        };
+        const summaries = fbaRes?.inventorySummaries ?? [];
+        nextToken = fbaRes?.nextToken;
+        for (const s of summaries) {
+          const sku = s.sellerSku ?? (s as { SellerSku?: string }).SellerSku;
+          if (sku) {
+            const details = s.inventoryDetails ?? (s as { inventoryDetails?: { fulfillableQuantity?: number } }).inventoryDetails;
+            const qty =
+              s.fulfillableQuantity ?? (s as { FulfillableQuantity?: number }).FulfillableQuantity ??
+              details?.fulfillableQuantity ??
+              s.totalQuantity ?? (s as { TotalQuantity?: number }).TotalQuantity ?? 0;
+            const productName = s.productName ?? (s as { productName?: string }).ProductName ?? `Amazon ${sku}`;
+            fbaMap.set(sku, { qty, productName });
+          }
+        }
+      } while (nextToken);
+
+      // FBAに在庫がありproductsに無いSKU → 新規商品作成（売上なしでも出品中商品を一覧に表示するため）
+      const existingSkuSet = new Set<string>();
+      const { data: amazonProducts } = await supabase
+        .from('products')
+        .select('id, sku')
+        .eq('user_id', user.id)
+        .eq('platform', 'amazon')
+        .not('sku', 'is', null);
+
+      for (const p of amazonProducts ?? []) {
+        if (p.sku?.trim()) existingSkuSet.add(p.sku.trim());
+      }
+      for (const [sku, { qty, productName }] of fbaMap) {
+        if (qty <= 0 || existingSkuSet.has(sku)) continue;
+        const { data: newProd } = await supabase
+          .from('products')
+          .insert({
+            user_id: user.id,
+            name: productName,
+            cost_yen: 0,
+            stock: qty,
+            platform: 'amazon',
+            sku,
+            sku_locked: true,
+            stock_received_at: new Date().toISOString().slice(0, 10),
+            updated_at: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+        if (newProd) {
+          existingSkuSet.add(sku);
+          inventoryUpdated += 1;
+          const now = new Date().toISOString();
+          await supabase.from('product_location_stock').upsert(
+            [
+              { product_id: newProd.id, location: 'home', quantity: 0, updated_at: now },
+              { product_id: newProd.id, location: 'warehouse', quantity: 0, updated_at: now },
+              { product_id: newProd.id, location: 'fba', quantity: qty, updated_at: now },
+            ],
+            { onConflict: 'product_id,location' }
+          );
+        }
+      }
+
+      const productsToUpdate = amazonProducts ?? [];
+      for (const p of productsToUpdate) {
+        const sku = p.sku?.trim();
+        if (!sku) continue;
+
+        let qty: number | undefined = fbaMap.get(sku)?.qty;
+        if (qty === undefined && hasSellerIdForFbm) {
+          // FBM在庫取得（getListingsItem）
+          await sleep(250); // 0.2 req/sec
+          try {
+            const listingRes = await spClient.callAPI({
+              operation: 'getListingsItem',
+              endpoint: 'listingsItems',
+              path: { sellerId: sellerId!, sku },
+              query: {
+                marketplaceIds: JAPAN_MARKETPLACE,
+                includedData: 'fulfillmentAvailability',
+              },
+              options: { version: '2021-08-01' as const },
+            }) as Record<string, unknown>;
+            const avail =
+              listingRes?.fulfillmentAvailability ??
+              listingRes?.fulfillment_availability ??
+              (listingRes?.summaries as Array<{ fulfillmentAvailability?: Array<{ quantity?: number }> }>)?.[0]?.fulfillmentAvailability;
+            if (Array.isArray(avail) && avail.length > 0) {
+              qty = (avail as Array<{ quantity?: number }>).reduce((sum, a) => sum + (a.quantity ?? 0), 0);
+            }
+          } catch {
+            // FBM在庫取得失敗（未出品等）はスキップ
+          }
+        }
+        const finalQty = qty ?? 0;
+
+        const { error: updErr } = await supabase
+          .from('products')
+          .update({
+            stock: finalQty,
+            stock_received_at: new Date().toISOString().slice(0, 10),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', p.id);
+
+        if (!updErr) {
+          inventoryUpdated += 1;
+          const now = new Date().toISOString();
+          // product_location_stock: FBA在庫は fba、FBM在庫は warehouse（家は常に0）
+          const isFba = fbaMap.has(sku) && (fbaMap.get(sku)?.qty ?? 0) > 0;
+          await supabase.from('product_location_stock').upsert(
+            [
+              { product_id: p.id, location: 'home', quantity: 0, updated_at: now },
+              { product_id: p.id, location: 'warehouse', quantity: isFba ? 0 : finalQty, updated_at: now },
+              { product_id: p.id, location: 'fba', quantity: isFba ? finalQty : 0, updated_at: now },
+            ],
+            { onConflict: 'product_id,location' }
+          );
+        }
+      }
+    } catch (invErr) {
+      console.warn('Amazon inventory sync warning:', invErr);
+      // 売上同期は成功しているので在庫のみ部分失敗として続行
+    }
+
     return NextResponse.json({
       ok: true,
       transactionsFound: results.length,
       synced: synced.length,
+      inventoryUpdated,
     });
   } catch (e) {
     const err = e as Error & { response?: { body?: string }; errors?: Array<{ message?: string }> };

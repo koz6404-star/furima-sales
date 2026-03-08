@@ -7,7 +7,8 @@ Amazon自動同期を使うには、SP-API の認証情報が必要です。以�
 ## 1. 前提条件
 
 - **開発者プロフィール**が承認済みであること（SPPで確認）
-- **財務会計（Finance & Accounting）**ロールが承認されていること
+- **財務会計（Finance & Accounting）**ロールが承認されていること（売上同期用）
+- **商品出品（Product Listing）**または**在庫と注文の追跡（Inventory and Order Tracking）**ロールが承認されていること（在庫同期用）
 
 ---
 
@@ -73,6 +74,7 @@ curl -X POST "https://api.amazon.co.jp/auth/o2/token" \
 | `SELLING_PARTNER_APP_CLIENT_ID` | LWA クライアント ID | `amzn1.application-oa2-client.xxx` |
 | `SELLING_PARTNER_APP_CLIENT_SECRET` | LWA クライアントシークレット | `amzn1.oa2-cs.v1.xxx` |
 | `AMAZON_REFRESH_TOKEN` | ステップ3で取得したリフレッシュトークン | `Atzr|xxx` |
+| `AMAZON_SELLER_ID` | （任意）FBM在庫取得用。Seller Central「商取引アカウント ID」。未設定時は FBA 在庫のみ同期 | `A1XXXXXXX` |
 
 ### 4.1 ローカル開発（.env.local）
 
@@ -82,6 +84,8 @@ curl -X POST "https://api.amazon.co.jp/auth/o2/token" \
 SELLING_PARTNER_APP_CLIENT_ID=amzn1.application-oa2-client.xxxxx
 SELLING_PARTNER_APP_CLIENT_SECRET=amzn1.oa2-cs.v1.xxxxx
 AMAZON_REFRESH_TOKEN=Atzr|xxxxx
+# FBM在庫を同期する場合は Seller Central の商取引アカウント ID を追加
+AMAZON_SELLER_ID=A1XXXXXXX
 ```
 
 `.env.local` は git にコミットしないでください（`.gitignore` に含まれている想定）。
@@ -92,6 +96,53 @@ AMAZON_REFRESH_TOKEN=Atzr|xxxxx
 2. 上記3つの変数を追加
 3. **Production / Preview / Development** のいずれかに適用
 4. 再デプロイ後、反映されます
+
+### 4.3 AMAZON_SELLER_ID（商取引アカウント ID）の確認方法（FBM 在庫同期用）
+
+FBM（自社発送）商品の在庫を同期するには、**商取引アカウント ID**（セラーID / 出品者ID / 出品者トークン）を環境変数 `AMAZON_SELLER_ID` に設定する必要があります。
+
+この ID は **13〜14桁の英数字**で、**「A1」で始まる**形式です（例: `A1XX22YY33ZZ44`）。
+
+#### 方法1: セラーセントラル設定画面から確認（推奨）
+
+1. [Seller Central（セラーセントラル）](https://sellercentral.amazon.co.jp/) にログイン
+2. ページ右上の **歯車アイコン（設定）** をクリック
+3. **出品用アカウント情報** → **出品者情報** をクリック
+4. **「あなたの出品者トークン」** をクリック
+5. 表示された英数字（`A1` で始まる13〜14桁）が商取引アカウント ID です
+
+> **注意**: 小口出品プランの場合、「出品者トークン」が表示されないことがあります。その場合は方法2を試してください。
+
+#### 方法2: インテグレーション画面から確認
+
+1. セラーセントラルにログイン
+2. 右上の **設定** → **インテグレーション** を選択
+3. **出品者ID** の欄に表示されている英数字を確認
+
+> 「インテグレーション」が表示されない場合は、アカウントのプライマリユーザーに権限付与を依頼してください。
+
+#### 方法3: ストアフロントの URL から確認
+
+1. セラーセントラルにログイン
+2. **パフォーマンス** → **評価** → **詳しい出品者情報** をクリック
+3. ストアフロントページが開くので、ブラウザのアドレスバーの URL を確認
+4. `amazon.co.jp/shops/` の **直後に続く英数字**、または URL 内の **`seller=`** の後に続く英数字がセラーID です
+
+#### 方法4: 自社出品商品のリンクから確認
+
+1. 自社で出品している商品のページを Amazon で開く
+2. **「新品の出品：XX円」** のリンクから自社のショップ名をクリック
+3. 開いたストアページの URL に `seller=A1XXXXXXXXXXXX` のように含まれている部分の `A1...` がセラーID
+
+#### 設定例
+
+確認した ID を `.env.local` または Vercel の環境変数に追加：
+
+```
+AMAZON_SELLER_ID=A1XX22YY33ZZ44
+```
+
+> `AMAZON_SELLER_ID` を設定しない場合、**FBA 在庫のみ**同期され、FBM 在庫は取得されません。
 
 ---
 
@@ -108,7 +159,15 @@ AMAZON_REFRESH_TOKEN=Atzr|xxxxx
 
 ### 日常の更新同期
 
-以降は **「Amazon同期」** ボタンで、過去90日分の差分のみを取得します。既に登録済みの注文は重複登録されません。
+以降は **「Amazon同期」** ボタンで、過去90日分の売上差分と在庫を取得します。既に登録済みの注文は重複登録されません。
+
+### 在庫同期について
+
+- **FBA在庫**: FBA Inventory API で全SKUの在庫を取得します。
+  - 既存の Amazon 商品（`platform=amazon` かつ `sku` あり）の在庫を更新します。
+  - **products に未登録の FBA SKU で在庫ありのものは、新規商品として自動登録**されます（売上未発生でも出品中商品が商品一覧に表示されます）。
+- **FBM在庫**: 環境変数 `AMAZON_SELLER_ID` を設定している場合、FBAにないSKUについて Listings API でFBM在庫を取得します。
+- 在庫は `product_location_stock` に反映されます（FBA在庫→`fba`、FBM在庫→`warehouse`）。
 
 ---
 
