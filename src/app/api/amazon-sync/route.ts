@@ -566,7 +566,7 @@ export async function POST(req: Request) {
       fbaSkusFound,
     });
   } catch (e) {
-    const err = e as Error & { response?: { body?: string }; statusCode?: number; errors?: Array<{ message?: string }> } };
+    const err = e as Error & { response?: { body?: string } };
     let msg = err?.message ?? String(e);
     const rawBody = err?.response?.body;
     if (rawBody) {

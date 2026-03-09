@@ -25,8 +25,8 @@ export function AmazonSyncButton() {
         throw new Error(text || '同期に失敗しました（応答が不正です）');
       }
       if (!res.ok) throw new Error((data.error as string) || text || '同期に失敗しました');
-      const inv = data.inventoryUpdated ?? 0;
-      const fbaSkus = data.fbaSkusFound ?? 0;
+      const inv = Number(data.inventoryUpdated ?? 0);
+      const fbaSkus = Number(data.fbaSkusFound ?? 0);
       const invErr = data.inventoryError;
       let msg = `取得: ${data.transactionsFound ?? 0}件、登録: ${data.synced ?? 0}件`;
       if (inv > 0) msg += `、在庫更新: ${inv}件`;
