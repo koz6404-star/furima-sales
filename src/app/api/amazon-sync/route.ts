@@ -71,7 +71,7 @@ function findSku(contexts?: Array<{ sku?: string }>): string | null {
   return null;
 }
 
-/** ネストした breakdowns を再帰的に走査して手数料・広告・送料を集計 */
+/** ネストした breakdowns を再帰的に走査。葉ノード（明細）のみ手数料・広告・送料を集計（二重計上防止） */
 function getFeeBreakdown(breakdowns: unknown): {
   feeYen: number;
   adSpendYen: number;
@@ -89,17 +89,21 @@ function getFeeBreakdown(breakdowns: unknown): {
   }
   function process(list: Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number }; breakdowns?: unknown }>) {
     for (const b of list) {
+      const children = b.breakdowns as Array<{ breakdownType?: string }> | undefined;
+      const hasNonEmptyChildren = Array.isArray(children) && children.length > 0;
+      if (hasNonEmptyChildren) {
+        process(children as Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number }; breakdowns?: unknown }>);
+        continue; // 親は集計せず子のみ
+      }
       const amt = parseAmount(b.breakdownAmount);
       const absAmt = Math.abs(amt);
       const type = (b.breakdownType || '').toLowerCase();
-      // 子 breakdowns を先に再帰処理
-      if (b.breakdowns && Array.isArray(b.breakdowns)) {
-        process(b.breakdowns as Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number }; breakdowns?: unknown }>);
-      }
-      // 親カテゴリ（Sales, Product Charges, Expenses）は金額を足さずスキップ
-      if (type.includes('sales') || type.includes('product charges') || type.includes('expenses')) continue;
-      if (type.includes('principal') || type.includes('principle')) continue; // 売上本体
-      if (type.includes('commission') || type.includes('referral') || type.includes('variable') || type.includes('closing') || type.includes('fixed')) {
+      // 売上本体・税（OurPriceTax等）はスキップ
+      if (type.includes('ourpriceprincipal') || type.includes('principal') || type.includes('principle')) continue;
+      if (type.includes('ourpricetax')) continue; // 売上税はスキップ
+      if (type.includes('sales') || type.includes('productcharges') || type.includes('product charges') || type.includes('expenses')) continue;
+      // 手数料・費用（AmazonFees, Commission, Base 等の葉）
+      if (type.includes('commission') || type.includes('referral') || type.includes('amazonfees') || type.includes('base')) {
         feeYen += absAmt;
       } else if (type.includes('fba') || (type.includes('fee') && !type.includes('ad'))) {
         feeYen += absAmt;
@@ -107,8 +111,10 @@ function getFeeBreakdown(breakdowns: unknown): {
         adSpendYen += absAmt;
       } else if (type.includes('shipping') || type.includes('fulfillment') || type.includes('配送')) {
         shippingYen += absAmt;
-      } else if (type.length > 0 && absAmt > 0) {
-        // その他は手数料として扱う（Amazon の費用種別は多岐にわたるため）
+      } else if (type === 'tax' && amt < 0) {
+        // Commission内のTax（-11など）は手数料として集計
+        feeYen += absAmt;
+      } else if (type.length > 0 && absAmt > 0 && !type.includes('ourprice')) {
         feeYen += absAmt;
       }
     }

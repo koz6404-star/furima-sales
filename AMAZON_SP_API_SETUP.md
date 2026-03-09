@@ -8,7 +8,9 @@ Amazon自動同期を使うには、SP-API の認証情報が必要です。以�
 
 - **開発者プロフィール**が承認済みであること（SPPで確認）
 - **財務会計（Finance & Accounting）**ロールが承認されていること（売上同期用）
-- **商品出品（Product Listing）**または**在庫と注文の追跡（Inventory and Order Tracking）**ロールが承認されていること（在庫同期用）
+- **在庫と注文の追跡（Inventory and Order Tracking）**ロールが承認されていること（FBA在庫同期用・必須）
+  - 未承認の場合「Access to requested resource is denied」となり在庫が取得できません
+  - SPP「アプリを開発」→「認証情報を管理」→該当アプリでロールを追加し、セラーに再認証してもらってください
 
 ---
 
