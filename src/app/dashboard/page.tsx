@@ -61,7 +61,8 @@ export default async function DashboardPage({
     totalShipping += s.shipping_yen;
     totalMaterial += (s.material_yen || 0);
     totalProfit += s.gross_profit_yen;
-    const platform = s.platform === 'mercari' ? 'メルカリ' : 'ラクマ';
+    const platform =
+      s.platform === 'mercari' ? 'メルカリ' : s.platform === 'amazon' ? 'Amazon' : 'ラクマ';
     if (!byPlatform[platform]) {
       byPlatform[platform] = { revenue: 0, fee: 0, shipping: 0, profit: 0 };
     }

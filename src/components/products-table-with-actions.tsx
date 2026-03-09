@@ -62,7 +62,7 @@ export function ProductsTableWithActions({
   returnTo,
 }: {
   products: Product[];
-  locationStockMap?: Record<string, { home: number; warehouse: number }>;
+  locationStockMap?: Record<string, { home: number; warehouse: number; fba: number }>;
   showStock?: boolean;
   redirectAfterDelete?: '/products' | '/products/sold-out' | '/products/by-profit';
   allowSetCreation?: boolean;
@@ -246,7 +246,7 @@ export function ProductsTableWithActions({
           return (
             <div
               key={p.id}
-              className="flex gap-3 p-4 items-start touch-manipulation active:bg-slate-50"
+              className={`flex gap-3 p-4 items-start touch-manipulation ${p.platform === 'amazon' ? 'bg-orange-50/80 active:bg-orange-100/80' : 'active:bg-slate-50'}`}
             >
               <label className="flex-shrink-0 pt-1 cursor-pointer select-none min-w-[44px] min-h-[44px] flex items-center justify-center">
                 <input
@@ -286,7 +286,12 @@ export function ProductsTableWithActions({
                       {showStock && (
                         <>
                           {p.platform === 'amazon' ? (
-                            <span>FBA在庫: {p.stock}</span>
+                            <>
+                              <span>家: —</span>
+                              <span>倉庫: {(locationStockMap[p.id]?.warehouse ?? 0) > 0 ? locationStockMap[p.id]?.warehouse : '—'}</span>
+                              <span>FBA: {(locationStockMap[p.id]?.fba ?? 0) > 0 ? locationStockMap[p.id]?.fba : '—'}</span>
+                              <span>在庫: {p.stock}</span>
+                            </>
                           ) : (
                             <>
                               <span className="inline-flex items-center gap-1">
@@ -298,6 +303,7 @@ export function ProductsTableWithActions({
                                 />
                               </span>
                               <span>倉庫: {locationStockMap[p.id]?.warehouse ?? '-'}</span>
+                              <span>FBA: {(locationStockMap[p.id]?.fba ?? 0) > 0 ? locationStockMap[p.id]?.fba : '-'}</span>
                               <span>在庫: {p.stock}</span>
                             </>
                           )}
@@ -354,6 +360,7 @@ export function ProductsTableWithActions({
               <>
                 <th className="px-4 py-3 text-right text-sm font-semibold">家</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold">倉庫</th>
+                <th className="px-4 py-3 text-right text-sm font-semibold">FBA</th>
                 <th className="px-4 py-3 text-right text-sm font-semibold">在庫</th>
               </>
             )}
@@ -372,7 +379,7 @@ export function ProductsTableWithActions({
           {(!products || products.length === 0) && (
             <tr>
               <td
-                colSpan={showStock ? 14 : 8}
+                colSpan={showStock ? 15 : 8}
                 className="px-4 py-8 text-center text-slate-500"
               >
                 {showStock ? '在庫ありの商品がありません' : '完売商品がありません'}
@@ -387,8 +394,8 @@ export function ProductsTableWithActions({
             const price20 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 20) : 0;
             const price30 = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 30) : 0;
             const priceCutLoss = hasDefaultShipping ? calcTargetPriceForMargin(p.cost_yen, feeRatePercent, defaultShippingYen, defaultMaterialYen, 0) : 0;
-            return (
-              <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
+              return (
+              <tr key={p.id} className={`border-t border-slate-100 ${p.platform === 'amazon' ? 'bg-orange-50/70 hover:bg-orange-100/70' : 'hover:bg-slate-50'}`}>
                 <td className="px-4 py-3 w-14 min-w-[3.5rem] text-center bg-emerald-50/50 border-r border-emerald-100/50 align-middle p-0">
                   <label className="flex items-center justify-center cursor-pointer w-full min-h-[3rem] hover:bg-emerald-100/50 py-3 select-none">
                     <input
@@ -444,8 +451,9 @@ export function ProductsTableWithActions({
                     {p.platform === 'amazon' ? (
                       <>
                         <td className="px-4 py-3 text-right text-slate-400">—</td>
-                        <td className="px-4 py-3 text-right text-slate-400">—</td>
-                        <td className="px-4 py-3 text-right text-slate-600">FBA: {p.stock}</td>
+                        <td className="px-4 py-3 text-right text-slate-600">{(locationStockMap[p.id]?.warehouse ?? 0) > 0 ? locationStockMap[p.id]?.warehouse : '—'}</td>
+                        <td className="px-4 py-3 text-right text-slate-600">{(locationStockMap[p.id]?.fba ?? 0) > 0 ? locationStockMap[p.id]?.fba : '—'}</td>
+                        <td className="px-4 py-3 text-right">{p.stock}</td>
                       </>
                     ) : (
                       <>
@@ -460,6 +468,7 @@ export function ProductsTableWithActions({
                           </span>
                         </td>
                         <td className="px-4 py-3 text-right text-slate-600">{locationStockMap[p.id]?.warehouse ?? '-'}</td>
+                        <td className="px-4 py-3 text-right text-slate-600">{(locationStockMap[p.id]?.fba ?? 0) > 0 ? locationStockMap[p.id]?.fba : '—'}</td>
                         <td className="px-4 py-3 text-right">{p.stock}</td>
                       </>
                     )}

@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { SortOption } from './product-search-bar';
+import type { SortOption, PlatformFilter } from './product-search-bar';
 
-type LocationFilter = '' | 'home' | 'warehouse' | 'both';
+type LocationFilter = '' | 'home' | 'warehouse' | 'fba' | 'both';
 
 const SORT_LABELS: Record<SortOption, string> = {
   '': '更新日（新しい順）',
@@ -46,17 +46,20 @@ type Props = {
   onClose: () => void;
   onApply: (filters: {
     location: LocationFilter;
+    platform: PlatformFilter;
     setOnly: boolean;
     minProfit: number;
     sort: SortOption;
   }) => void;
   initial: {
     location: LocationFilter;
+    platform: PlatformFilter;
     setOnly: boolean;
     minProfit: number;
     sort: SortOption;
   };
   showLocation?: boolean;
+  showPlatform?: boolean;
 };
 
 export function FilterSortSheet({
@@ -65,8 +68,10 @@ export function FilterSortSheet({
   onApply,
   initial,
   showLocation = true,
+  showPlatform = false,
 }: Props) {
   const [location, setLocation] = useState<LocationFilter>(initial.location);
+  const [platform, setPlatform] = useState<PlatformFilter>(initial.platform);
   const [setOnly, setSetOnly] = useState(initial.setOnly);
   const [minProfit, setMinProfit] = useState(String(initial.minProfit || ''));
   const [sort, setSort] = useState<SortOption>(initial.sort);
@@ -74,17 +79,18 @@ export function FilterSortSheet({
   useEffect(() => {
     if (open) {
       setLocation(initial.location);
+      setPlatform(initial.platform);
       setSetOnly(initial.setOnly);
       setMinProfit(String(initial.minProfit || ''));
       setSort(initial.sort);
     }
-  }, [open, initial.location, initial.setOnly, initial.minProfit, initial.sort]);
+  }, [open, initial.location, initial.platform, initial.setOnly, initial.minProfit, initial.sort]);
 
   const handleApply = useCallback(() => {
     const n = Math.max(0, parseInt(minProfit.replace(/[^0-9]/g, ''), 10) || 0);
-    onApply({ location, setOnly, minProfit: n, sort });
+    onApply({ location, platform, setOnly, minProfit: n, sort });
     onClose();
-  }, [location, setOnly, minProfit, sort, onApply, onClose]);
+  }, [location, platform, setOnly, minProfit, sort, onApply, onClose]);
 
   if (!open) return null;
 
@@ -119,6 +125,21 @@ export function FilterSortSheet({
           <section>
             <h3 className="text-sm font-semibold text-slate-700 mb-3">フィルター</h3>
             <div className="space-y-4">
+              {showPlatform && (
+                <div>
+                  <label className="block text-sm text-slate-600 mb-1">プラットフォーム</label>
+                  <select
+                    value={platform}
+                    onChange={(e) => setPlatform(e.target.value as PlatformFilter)}
+                    className="w-full rounded border border-slate-300 px-3 py-2.5 text-base min-h-[44px] focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">全て</option>
+                    <option value="mercari">メルカリ</option>
+                    <option value="rakuma">ラクマ</option>
+                    <option value="amazon">Amazon</option>
+                  </select>
+                </div>
+              )}
               {showLocation && (
                 <div>
                   <label className="block text-sm text-slate-600 mb-1">保管場所</label>
@@ -130,6 +151,7 @@ export function FilterSortSheet({
                     <option value="">全て</option>
                     <option value="home">家のみ</option>
                     <option value="warehouse">倉庫のみ</option>
+                    <option value="fba">FBAのみ</option>
                     <option value="both">家・倉庫の両方</option>
                   </select>
                 </div>

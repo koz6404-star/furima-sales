@@ -13,7 +13,7 @@ const PER_PAGE = 20;
 export default async function SoldOutPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string; sort?: string; minProfit?: string }>;
+  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string; platform?: string; sort?: string; minProfit?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -23,6 +23,7 @@ export default async function SoldOutPage({
   const q = (params.q ?? '').trim();
   const match = params.match === 'exact' ? 'exact' : 'partial';
   const setOnly = params.setOnly === '1';
+  const platformFilter = params.platform === 'mercari' || params.platform === 'rakuma' || params.platform === 'amazon' ? params.platform : '';
   const sort = (params.sort as SortOption) ?? '';
   const minProfit = Math.max(0, parseInt(params.minProfit ?? '0', 10) || 0);
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
@@ -34,6 +35,9 @@ export default async function SoldOutPage({
     .select('*', { count: 'exact' })
     .eq('user_id', user.id)
     .eq('stock', 0);
+  if (platformFilter) {
+    query = query.eq('platform', platformFilter);
+  }
 
   if (setOnly) {
     const { data: setRows } = await supabase
@@ -79,6 +83,7 @@ export default async function SoldOutPage({
     q ? `q=${encodeURIComponent(q)}` : '',
     q ? `match=${match}` : '',
     setOnly ? 'setOnly=1' : '',
+    platformFilter ? `platform=${platformFilter}` : '',
     sort ? `sort=${encodeURIComponent(sort)}` : '',
     minProfit > 0 ? `minProfit=${minProfit}` : '',
   ].filter(Boolean).join('&');

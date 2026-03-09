@@ -39,6 +39,7 @@ export default async function ProductDetailPage({
     .eq('product_id', id);
   const stockAtHome = locationStock?.find((r) => r.location === 'home')?.quantity ?? 0;
   const stockAtWarehouse = locationStock?.find((r) => r.location === 'warehouse')?.quantity ?? 0;
+  const stockAtFba = locationStock?.find((r) => r.location === 'fba')?.quantity ?? 0;
 
   const { data: sales } = await supabase
     .from('sales')
@@ -190,9 +191,9 @@ export default async function ProductDetailPage({
                   <span className="text-slate-500">在庫数</span>
                   <p className="font-semibold">{product.stock}</p>
                   {(product as { platform?: string | null }).platform === 'amazon' ? (
-                    <p className="text-slate-600 text-xs mt-0.5">FBA在庫（API同期）</p>
+                    <p className="text-slate-600 text-xs mt-0.5">家: — / 倉庫: {stockAtWarehouse || '—'} / FBA: {stockAtFba || '—'}（API同期）</p>
                   ) : (
-                    <p className="text-slate-600 text-xs mt-0.5">家: {stockAtHome} / 倉庫: {stockAtWarehouse}</p>
+                    <p className="text-slate-600 text-xs mt-0.5">家: {stockAtHome} / 倉庫: {stockAtWarehouse} / FBA: {stockAtFba || '—'}</p>
                   )}
                 </div>
                 {product.stock_received_at && (

@@ -103,12 +103,13 @@ export async function GET(req: NextRequest) {
     .from('product_location_stock')
     .select('product_id, location, quantity')
     .in('product_id', productIds);
-  const locMap: Record<string, { home: number; warehouse: number }> = {};
+  const locMap: Record<string, { home: number; warehouse: number; fba: number }> = {};
   for (const row of locationStock || []) {
     const key = row.product_id;
-    if (!locMap[key]) locMap[key] = { home: 0, warehouse: 0 };
+    if (!locMap[key]) locMap[key] = { home: 0, warehouse: 0, fba: 0 };
     if (row.location === 'home') locMap[key].home = row.quantity;
     if (row.location === 'warehouse') locMap[key].warehouse = row.quantity;
+    if (row.location === 'fba') locMap[key].fba = row.quantity;
   }
 
   const headerRow = [
@@ -121,6 +122,7 @@ export async function GET(req: NextRequest) {
     '現在在庫',
     '家',
     '倉庫',
+    'FBA',
     '最古入荷日',
     '累計販売数',
     '累計粗利',
@@ -136,7 +138,7 @@ export async function GET(req: NextRequest) {
 
   for (const p of products) {
     const sale = salesByProduct[p.id] ?? { qty: 0, profit: 0, revenue: 0, lastSoldAt: null, qty30d: 0, qty90d: 0 };
-    const loc = locMap[p.id] ?? { home: 0, warehouse: 0 };
+    const loc = locMap[p.id] ?? { home: 0, warehouse: 0, fba: 0 };
     const avgPrice = sale.qty > 0 ? Math.round(sale.revenue / sale.qty) : 0;
     const profitRate = sale.revenue > 0 ? Math.round((sale.profit / sale.revenue) * 100) : 0;
     const daysInStock = getDaysSinceReceived(p.oldest_received_at) ?? 0;
@@ -151,6 +153,7 @@ export async function GET(req: NextRequest) {
       String(p.stock),
       String(loc.home),
       String(loc.warehouse),
+      String(loc.fba),
       p.oldest_received_at ? String(p.oldest_received_at).slice(0, 10) : '',
       String(sale.qty),
       String(sale.profit),

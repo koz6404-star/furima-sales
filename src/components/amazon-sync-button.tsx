@@ -17,8 +17,14 @@ export function AmazonSyncButton() {
         headers: { 'Content-Type': 'application/json' },
         body: from ? JSON.stringify({ from }) : '{}',
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '同期に失敗しました');
+      const text = await res.text();
+      let data: Record<string, unknown>;
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        throw new Error(text || '同期に失敗しました（応答が不正です）');
+      }
+      if (!res.ok) throw new Error((data.error as string) || text || '同期に失敗しました');
       const inv = data.inventoryUpdated ?? 0;
       const fbaSkus = data.fbaSkusFound ?? 0;
       const invErr = data.inventoryError;

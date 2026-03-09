@@ -14,7 +14,7 @@ const PER_PAGE = 20;
 export default async function ProductsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string; location?: string; sort?: string; minProfit?: string }>;
+  searchParams: Promise<{ q?: string; match?: string; page?: string; setOnly?: string; location?: string; platform?: string; sort?: string; minProfit?: string }>;
 }) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -24,7 +24,8 @@ export default async function ProductsPage({
   const q = (params.q ?? '').trim();
   const match = params.match === 'exact' ? 'exact' : 'partial';
   const setOnly = params.setOnly === '1';
-  const locationFilter = params.location === 'home' || params.location === 'warehouse' || params.location === 'both' ? params.location : '';
+  const locationFilter = params.location === 'home' || params.location === 'warehouse' || params.location === 'fba' || params.location === 'both' ? params.location : '';
+  const platformFilter = params.platform === 'mercari' || params.platform === 'rakuma' || params.platform === 'amazon' ? params.platform : '';
   const sort = (params.sort as SortOption) ?? '';
   const minProfit = Math.max(0, parseInt(params.minProfit ?? '0', 10) || 0);
   const page = Math.max(1, parseInt(params.page ?? '1', 10) || 1);
@@ -49,11 +50,17 @@ export default async function ProductsPage({
     }
   }
 
+  // 在庫条件: 通常は stock > 0。Amazon フィルター時は在庫0も表示（取り込み確認用）
   let query = supabase
     .from('products')
     .select('*', { count: 'exact' })
-    .eq('user_id', user.id)
-    .gt('stock', 0);
+    .eq('user_id', user.id);
+  if (platformFilter === 'amazon') {
+    query = query.eq('platform', 'amazon').gte('stock', 0);
+  } else {
+    query = query.gt('stock', 0);
+    if (platformFilter) query = query.eq('platform', platformFilter);
+  }
 
   if (productIdsFromLocation !== null) {
     if (productIdsFromLocation.length === 0) {
@@ -103,16 +110,17 @@ export default async function ProductsPage({
   if (orderConfig.nullsFirst !== undefined) orderOpts.nullsFirst = orderConfig.nullsFirst;
   const { data: products, count: totalCount } = await query.order(orderConfig.column, orderOpts).range(from, to);
   const productIds = (products ?? []).map((p) => p.id);
-  const locationStockMap: Record<string, { home: number; warehouse: number }> = {};
+  const locationStockMap: Record<string, { home: number; warehouse: number; fba: number }> = {};
   if (productIds.length > 0) {
     const { data: locRows } = await supabase.from('product_location_stock').select('product_id, location, quantity').in('product_id', productIds);
     for (const p of products ?? []) {
-      locationStockMap[p.id] = { home: 0, warehouse: 0 };
+      locationStockMap[p.id] = { home: 0, warehouse: 0, fba: 0 };
     }
     for (const r of locRows ?? []) {
       if (locationStockMap[r.product_id]) {
         if (r.location === 'home') locationStockMap[r.product_id].home = r.quantity ?? 0;
         else if (r.location === 'warehouse') locationStockMap[r.product_id].warehouse = r.quantity ?? 0;
+        else if (r.location === 'fba') locationStockMap[r.product_id].fba = r.quantity ?? 0;
       }
     }
   }
@@ -122,6 +130,7 @@ export default async function ProductsPage({
     q ? `match=${match}` : '',
     setOnly ? 'setOnly=1' : '',
     locationFilter ? `location=${locationFilter}` : '',
+    platformFilter ? `platform=${platformFilter}` : '',
     sort ? `sort=${encodeURIComponent(sort)}` : '',
     minProfit > 0 ? `minProfit=${minProfit}` : '',
   ].filter(Boolean).join('&');

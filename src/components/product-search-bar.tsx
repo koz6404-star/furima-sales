@@ -7,7 +7,9 @@ import { useCallback, useEffect, useState } from 'react';
 
 type MatchType = 'partial' | 'exact';
 
-export type LocationFilter = '' | 'home' | 'warehouse' | 'both';
+export type LocationFilter = '' | 'home' | 'warehouse' | 'fba' | 'both';
+
+export type PlatformFilter = '' | 'mercari' | 'rakuma' | 'amazon';
 
 export type SortOption =
   | ''
@@ -31,6 +33,7 @@ function buildParams(
   match: MatchType,
   setOnly: boolean,
   location: LocationFilter,
+  platform: PlatformFilter,
   sort: SortOption,
   minProfit: number
 ): URLSearchParams {
@@ -41,6 +44,7 @@ function buildParams(
   }
   if (setOnly) params.set('setOnly', '1');
   if (location) params.set('location', location);
+  if (platform) params.set('platform', platform);
   if (sort) params.set('sort', sort);
   if (minProfit > 0) params.set('minProfit', String(minProfit));
   return params;
@@ -53,6 +57,7 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
   const match = (searchParams.get('match') as MatchType) ?? 'partial';
   const setOnly = searchParams.get('setOnly') === '1';
   const location = (searchParams.get('location') as LocationFilter) ?? '';
+  const platform = (searchParams.get('platform') as PlatformFilter) ?? '';
   const sort = (searchParams.get('sort') as SortOption) ?? '';
   const minProfit = Math.max(0, parseInt(searchParams.get('minProfit') ?? '0', 10) || 0);
 
@@ -61,8 +66,8 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
   useEffect(() => setInputValue(q), [q]);
 
   const applyFilters = useCallback(
-    (f: { location: LocationFilter; setOnly: boolean; minProfit: number; sort: SortOption }) => {
-      const params = buildParams(inputValue.trim(), match, f.setOnly, f.location, f.sort, f.minProfit);
+    (f: { location: LocationFilter; platform: PlatformFilter; setOnly: boolean; minProfit: number; sort: SortOption }) => {
+      const params = buildParams(inputValue.trim(), match, f.setOnly, f.location, f.platform, f.sort, f.minProfit);
       const query = params.toString();
       router.push(query ? `${basePath}?${query}` : basePath);
     },
@@ -72,16 +77,16 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      const params = buildParams(inputValue.trim(), match, setOnly, location, sort, minProfit);
+      const params = buildParams(inputValue.trim(), match, setOnly, location, platform, sort, minProfit);
       const query = params.toString();
       router.push(query ? `${basePath}?${query}` : basePath);
     },
-    [inputValue, match, setOnly, location, sort, minProfit, basePath, router]
+    [inputValue, match, setOnly, location, platform, sort, minProfit, basePath, router]
   );
 
   const handleMatchChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newMatch = e.target.value as MatchType;
-    const params = buildParams(inputValue.trim(), newMatch, setOnly, location, sort, minProfit);
+    const params = buildParams(inputValue.trim(), newMatch, setOnly, location, platform, sort, minProfit);
     router.push(params.toString() ? `${basePath}?${params.toString()}` : basePath);
   };
 
@@ -90,7 +95,7 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
     router.push(basePath);
   };
 
-  const filterCount = [setOnly, location, minProfit > 0, sort].filter(Boolean).length;
+  const filterCount = [setOnly, location, platform, minProfit > 0, sort].filter(Boolean).length;
 
   return (
     <>
@@ -170,7 +175,7 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
             <path d="m21 21-4.3-4.3" />
           </svg>
         </button>
-        {(q || inputValue || setOnly || location || sort || minProfit > 0) && (
+        {(q || inputValue || setOnly || location || platform || sort || minProfit > 0) && (
           <button
             type="button"
             onClick={handleClear}
@@ -185,8 +190,9 @@ export function ProductSearchBar({ basePath }: { basePath: '/products' | '/produ
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onApply={applyFilters}
-        initial={{ location, setOnly, minProfit, sort }}
+        initial={{ location, platform, setOnly, minProfit, sort }}
         showLocation={basePath === '/products'}
+        showPlatform={true}
       />
     </>
   );
