@@ -566,14 +566,22 @@ export async function POST(req: Request) {
       fbaSkusFound,
     });
   } catch (e) {
-    const err = e as Error & { response?: { body?: string }; errors?: Array<{ message?: string }> };
+    const err = e as Error & { response?: { body?: string }; statusCode?: number; errors?: Array<{ message?: string }> } };
     let msg = err?.message ?? String(e);
-    try {
-      const body = err?.response?.body ? JSON.parse(err.response.body) : err;
-      const apiMsg = body?.errors?.[0]?.message ?? body?.message;
-      if (apiMsg) msg = apiMsg;
-    } catch {
-      //
+    const rawBody = err?.response?.body;
+    if (rawBody) {
+      try {
+        const body = JSON.parse(rawBody) as { errors?: Array<{ message?: string }>; message?: string };
+        const apiMsg = body?.errors?.[0]?.message ?? body?.message;
+        if (apiMsg) msg = apiMsg;
+      } catch {
+        // 非JSON応答（例: "An error occurred"）の場合は生のテキストを使用
+        msg = rawBody.length > 200 ? rawBody.slice(0, 200) + '...' : rawBody;
+      }
+    }
+    if (msg.includes('Unexpected token') && msg.includes('not valid JSON')) {
+      msg =
+        'Amazon APIの応答が不正です。Vercelの環境変数（AMAZON_REFRESH_TOKEN等）が正しく設定されているか確認してください。';
     }
     console.error('Amazon sync error:', msg);
     return NextResponse.json({ error: msg }, { status: 500 });
