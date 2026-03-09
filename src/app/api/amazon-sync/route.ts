@@ -8,6 +8,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createSpApiClient, JAPAN_MARKETPLACE } from '@/lib/amazon-sp-api';
 
+export const maxDuration = 300;
+
 // 通常の増分同期：過去何日分
 const SYNC_DAYS = 90;
 // APIは1リクエスト最大180日。これより長い期間はチャンク分割する
