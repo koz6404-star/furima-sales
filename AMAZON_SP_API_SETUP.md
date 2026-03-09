@@ -6,18 +6,20 @@ Amazon自動同期を使うには、SP-API の認証情報が必要です。以�
 
 ## 1. 前提条件
 
-- **開発者プロフィール**が承認済みであること（SPPで確認）
+- **開発者プロフィール**が承認済みであること（開発者コンソールで確認）
 - **財務会計（Finance & Accounting）**ロールが承認されていること（売上同期用）
 - **在庫と注文の追跡（Inventory and Order Tracking）**ロールが承認されていること（FBA在庫同期用・必須）
   - 未承認の場合「Access to requested resource is denied」となり在庫が取得できません
-  - SPP「アプリを開発」→「認証情報を管理」→該当アプリでロールを追加し、セラーに再認証してもらってください
+  - 開発者コンソールで該当アプリを開き、**Inventory and Order Tracking** または **Amazon Warehousing and Distribution** ロールを追加。追加後、セルフ認証の場合は再認証が必要
 
 ---
 
-## 2. アプリクライアントの作成（SPP）
+## 2. アプリクライアントの作成
 
-1. [Selling Partner Platform（SPP）](https://sellercentral.amazon.co.jp/sp) にログイン
-2. **アプリとサービス** → **アプリを開発** → **認証情報を管理**
+1. セラーセントラルにログインし、いずれかから開発者コンソールを開く：
+   - **方法A**: [開発者コンソール（日本）](https://sellercentral.amazon.co.jp/sellingpartner/developerconsole) に直接アクセス
+   - **方法B**: セラーセントラル → **アプリとサービス** メニュー → **アプリを開発**（Develop Apps）
+2. **認証情報を管理**
 3. **アプリを追加** をクリック
 4. 以下を入力して作成：
    - **アプリ名**: 例）フリマ売上管理
@@ -32,7 +34,7 @@ Amazon自動同期を使うには、SP-API の認証情報が必要です。以�
 
 ## 3. リフレッシュトークンの取得（セルフ認証）
 
-SPP が自社向けアプリとして扱う場合、セルフ認証でリフレッシュトークンを取得できます。
+自社向けアプリとして扱う場合、セルフ認証でリフレッシュトークンを取得できます。
 
 ### 3.1 認証URLの生成
 
@@ -173,6 +175,19 @@ AMAZON_SELLER_ID=A1XX22YY33ZZ44
 
 ---
 
+## 5.5 FBA在庫用ロールの追加（「Access denied」が出る場合）
+
+FBA在庫が「Access to requested resource is denied」で取得できない場合：
+
+1. **[開発者コンソール（日本）](https://sellercentral.amazon.co.jp/sellingpartner/developerconsole)** を開く
+2. ログイン後、該当アプリを選択
+3. **ロール（Roles）** の設定で以下を追加：
+   - **Inventory and Order Tracking**（在庫と注文の追跡）
+   - または **Amazon Warehousing and Distribution**（Amazon Warehousing and Distribution）
+4. 保存後、3章の認証URLで**再認証**し、新しいリフレッシュトークンを取得して環境変数を更新
+
+---
+
 ## 6. トラブルシューティング
 
 | 症状 | 対処 |
@@ -181,7 +196,7 @@ AMAZON_SELLER_ID=A1XX22YY33ZZ44
 | 「Access to requested resource is denied」 | 財務会計ロール未承認、またはリフレッシュトークンが無効 |
 | 「Invalid refresh token」 | リフレッシュトークンの再取得（3章をやり直し） |
 | 同期は動くがデータが0件 | 対象期間に Shipment トランザクションがない、またはマーケットプレイスが日本（A1VC38T7YXB528）でない |
-| **FBA在庫が反映されない** | SPPで「**在庫と注文の追跡（Inventory and Order Tracking）**」ロールが承認済みか確認。同期後に表示される「※FBA在庫APIが拒否されました」の有無を確認 |
+| **FBA在庫が反映されない** | 「Access to requested resource is denied」の場合はロール不足。[開発者コンソール](https://sellercentral.amazon.co.jp/sellingpartner/developerconsole)で該当アプリのロールに「在庫と注文の追跡」または「Amazon Warehousing and Distribution」を追加 |
 | **手数料・送料が0円のまま** | 初回同期後、再度「Amazon同期」を実行。既存売上は再実行時に手数料・送料が上書き更新されます |
 
 ---
