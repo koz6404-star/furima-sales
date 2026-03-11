@@ -79,6 +79,15 @@ function findSku(contexts?: Array<{ sku?: string }>): string | null {
   return null;
 }
 
+/** contexts から履行ネットワーク（AFN=FBA / MFN=FBM）を取得 */
+function findFulfillmentNetwork(contexts?: Array<{ fulfillmentNetwork?: string }>): string | null {
+  if (!contexts) return null;
+  for (const c of contexts) {
+    if (c.fulfillmentNetwork) return c.fulfillmentNetwork;
+  }
+  return null;
+}
+
 type BreakdownItem = {
   breakdownType?: string;
   BreakdownType?: string;
@@ -184,6 +193,8 @@ export async function POST(req: Request) {
       orderId: string | null;
       asin: string | null;
       sku: string | null;
+      /** AFN=FBA, MFN=FBM。contexts から取得。null は不明 */
+      fulfillmentNetwork: string | null;
       unitPrice: number;
       feeYen: number;
       adSpendYen: number;
@@ -233,7 +244,7 @@ export async function POST(req: Request) {
           description?: string;
           totalAmount?: { currencyAmount?: number };
           breakdowns?: Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number } }>;
-          contexts?: Array<{ asin?: string; sku?: string; quantityShipped?: number }>;
+          contexts?: Array<{ asin?: string; sku?: string; quantityShipped?: number; fulfillmentNetwork?: string }>;
         }>;
         postedDate?: string;
         PostedDate?: string;
@@ -255,6 +266,7 @@ export async function POST(req: Request) {
             orderId,
             asin: findAsin(tx.items?.flatMap((i) => i.contexts ?? []) as Array<{ asin?: string }>),
             sku: findSku(tx.items?.flatMap((i) => i.contexts ?? []) as Array<{ sku?: string }>),
+            fulfillmentNetwork: null,
             unitPrice,
             feeYen,
             adSpendYen,
@@ -283,6 +295,7 @@ export async function POST(req: Request) {
               orderId,
               asin: item.contexts?.find((c) => c.asin)?.asin ?? null,
               sku: item.contexts?.find((c) => c.sku)?.sku ?? null,
+              fulfillmentNetwork: findFulfillmentNetwork(item.contexts as Array<{ fulfillmentNetwork?: string }> | undefined),
               unitPrice,
               feeYen: Math.round(feeYen / quantity) || 0,
               adSpendYen: Math.round(adSpendYen / quantity) || 0,
@@ -547,12 +560,16 @@ export async function POST(req: Request) {
     let fbaSkusFound = 0;
     let fbaByAsinCount = 0;
     let amazonProductsCount = 0;
+    let fbaInboundTotal = 0;
+    let fbaReservedTotal = 0;
+    let fbaUnfulfillableTotal = 0;
     try {
       // sellerId が無くても FBA 在庫は取得可能（getInventorySummaries は sellerId 不要）
       const hasSellerIdForFbm = !!sellerId;
 
-      const fbaMap = new Map<string, { qty: number; productName: string }>();
-      const fbaByAsin = new Map<string, { qty: number; sku: string | null; productName: string }>();
+      const fbaMap = new Map<string, { qty: number; fnSku: string | null; inbound: number; reserved: number; unfulfillable: number; productName: string }>();
+      const fbaByAsin = new Map<string, { qty: number; sku: string | null; fnSku: string | null; inbound: number; reserved: number; unfulfillable: number; productName: string }>();
+      // fbaInboundTotal / fbaReservedTotal / fbaUnfulfillableTotal は try ブロック外で宣言済み
 
       // FBA在庫取得（getInventorySummaries）
       let nextToken: string | undefined;
@@ -579,16 +596,29 @@ export async function POST(req: Request) {
         type SummaryItem = {
           sellerSku?: string;
           SellerSku?: string;
+          /** Amazon FBA 履行ネットワーク SKU */
+          fnSku?: string;
+          FnSku?: string;
           asin?: string;
           Asin?: string;
           fulfillableQuantity?: number;
           FulfillableQuantity?: number;
           totalQuantity?: number;
           TotalQuantity?: number;
+          /** 販売不可数量（破損・期限切れ等） */
+          unfulfillableQuantity?: number;
+          UnfulfillableQuantity?: number;
+          /** 保留数量（注文処理中・FC間転送等） */
+          reservedQuantity?: {
+            totalReservedQuantity?: number;
+            pendingCustomerOrderQuantity?: number;
+            pendingTransshipmentQuantity?: number;
+            fcProcessingQuantity?: number;
+          };
           productName?: string;
           ProductName?: string;
-          inventoryDetails?: { fulfillableQuantity?: number; FulfillableQuantity?: number };
-          InventoryDetails?: { fulfillableQuantity?: number; FulfillableQuantity?: number };
+          inventoryDetails?: Record<string, unknown>;
+          InventoryDetails?: Record<string, unknown>;
         };
         // inventoryDetails のキーが表記揺れ（Unicode等）の場合に備え、オブジェクト走査で quantity を探す
         const extractFulfillable = (obj: unknown): number | undefined => {
@@ -614,14 +644,32 @@ export async function POST(req: Request) {
         for (const s of summaries as SummaryItem[]) {
           const sku = s.sellerSku ?? s.SellerSku;
           const asinVal = s.asin ?? s.Asin;
+          const fnSku = s.fnSku ?? s.FnSku ?? null;
           const details = getDetails(s as Record<string, unknown>);
           const qty =
             s.fulfillableQuantity ?? s.FulfillableQuantity ??
             extractFulfillable(details) ??
             s.totalQuantity ?? s.TotalQuantity ?? 0;
+          // 入庫中数量（inventoryDetails 内: inboundWorkingQuantity + inboundShippedQuantity + inboundReceivingQuantity）
+          const detailsObj = (details ?? {}) as Record<string, unknown>;
+          const inbound =
+            ((detailsObj.inboundWorkingQuantity as number) ?? 0) +
+            ((detailsObj.inboundShippedQuantity as number) ?? 0) +
+            ((detailsObj.inboundReceivingQuantity as number) ?? 0);
+          // 保留数量（reservedQuantity.totalReservedQuantity）
+          const reservedObj = s.reservedQuantity ??
+            (detailsObj.reservedQuantity as typeof s.reservedQuantity | undefined);
+          const reserved = reservedObj?.totalReservedQuantity ?? 0;
+          // 販売不可数量
+          const unfulfillable = s.unfulfillableQuantity ?? s.UnfulfillableQuantity ??
+            ((detailsObj.unfulfillableQuantity as number) ?? 0);
+          // 全体集計
+          fbaInboundTotal += inbound;
+          fbaReservedTotal += reserved;
+          fbaUnfulfillableTotal += unfulfillable;
           const productName = s.productName ?? s.ProductName ?? `Amazon ${sku ?? asinVal ?? '?'}`;
-          if (sku) fbaMap.set(sku, { qty, productName });
-          if (asinVal) fbaByAsin.set(asinVal, { qty, sku: sku ?? null, productName });
+          if (sku) fbaMap.set(sku, { qty, fnSku, inbound, reserved, unfulfillable, productName });
+          if (asinVal) fbaByAsin.set(asinVal, { qty, sku: sku ?? null, fnSku, inbound, reserved, unfulfillable, productName });
         }
       } while (nextToken);
       fbaSkusFound = fbaMap.size;
@@ -643,7 +691,7 @@ export async function POST(req: Request) {
         if (p.sku?.trim()) existingSkuSet.add(p.sku.trim());
         if (p.asin?.trim()) existingAsinSet.add(p.asin.trim());
       }
-      for (const [sku, { qty, productName }] of fbaMap) {
+      for (const [sku, { qty, fnSku, inbound, productName }] of fbaMap) {
         if (qty <= 0 || existingSkuSet.has(sku)) continue;
         const fbaAsin = [...fbaByAsin.entries()].find(([, v]) => v.sku === sku)?.[0];
         if (fbaAsin && existingAsinSet.has(fbaAsin)) continue;
@@ -657,6 +705,7 @@ export async function POST(req: Request) {
             platform: 'amazon',
             sku,
             asin: fbaAsin ?? undefined,
+            fn_sku: fnSku ?? undefined,
             sku_locked: true,
             stock_received_at: new Date().toISOString().slice(0, 10),
             updated_at: new Date().toISOString(),
@@ -672,6 +721,7 @@ export async function POST(req: Request) {
               { product_id: newProd.id, location: 'home', quantity: 0, updated_at: now },
               { product_id: newProd.id, location: 'warehouse', quantity: 0, updated_at: now },
               { product_id: newProd.id, location: 'fba', quantity: qty, updated_at: now },
+              { product_id: newProd.id, location: 'inbound', quantity: inbound, updated_at: now },
             ],
             { onConflict: 'product_id,location' }
           );
@@ -690,8 +740,9 @@ export async function POST(req: Request) {
         const asin = p.asin?.trim();
         if (!sku && !asin) continue;
 
-        let qty: number | undefined = sku ? getFbaBySku(sku)?.qty : undefined;
-        if (qty === undefined && asin) qty = getFbaByAsin(asin)?.qty;
+        const fbaEntry = sku ? getFbaBySku(sku) : undefined;
+        const fbaEntryByAsin = asin ? getFbaByAsin(asin) : undefined;
+        let qty: number | undefined = fbaEntry?.qty ?? fbaEntryByAsin?.qty;
         if (qty === undefined && hasSellerIdForFbm) {
           await sleep(250); // 0.2 req/sec
           const parseFbmQty = (res: Record<string, unknown>) => {
@@ -750,10 +801,16 @@ export async function POST(req: Request) {
 
         const finalQty = qty;
 
+        // FBA判定: 数量が0でも FBA 在庫サマリーに存在した商品は FBA（売り切れFBAを誤ってFBM扱いしない）
+        const isFba = !!(fbaEntry ?? fbaEntryByAsin);
+        const fnSkuVal = fbaEntry?.fnSku ?? fbaEntryByAsin?.fnSku ?? null;
+        const inboundQty = isFba ? (fbaEntry?.inbound ?? fbaEntryByAsin?.inbound ?? 0) : 0;
+
         const { error: updErr } = await supabase
           .from('products')
           .update({
             stock: finalQty,
+            ...(fnSkuVal ? { fn_sku: fnSkuVal } : {}),
             stock_received_at: new Date().toISOString().slice(0, 10),
             updated_at: new Date().toISOString(),
           })
@@ -763,12 +820,13 @@ export async function POST(req: Request) {
           inventoryUpdated += 1;
           const now = new Date().toISOString();
           // product_location_stock: FBA在庫は fba、FBM在庫は warehouse（家は常に0）
-          const isFba = (sku && (getFbaBySku(sku)?.qty ?? 0) > 0) || (asin && (getFbaByAsin(asin)?.qty ?? 0) > 0);
+          // inbound: FBA入庫中の数量（販売不可だが把握のため記録）
           await supabase.from('product_location_stock').upsert(
             [
               { product_id: p.id, location: 'home', quantity: 0, updated_at: now },
               { product_id: p.id, location: 'warehouse', quantity: isFba ? 0 : finalQty, updated_at: now },
               { product_id: p.id, location: 'fba', quantity: isFba ? finalQty : 0, updated_at: now },
+              { product_id: p.id, location: 'inbound', quantity: inboundQty, updated_at: now },
             ],
             { onConflict: 'product_id,location' }
           );
@@ -786,6 +844,9 @@ export async function POST(req: Request) {
         inventoryError: invErrMsg.includes('Access') || invErrMsg.includes('denied') || invErrMsg.includes('403')
           ? 'FBA在庫APIが拒否されました。SPPで「在庫と注文の追跡」ロールが承認済みか確認してください。'
           : invErrMsg,
+        fbaInboundTotal,
+        fbaReservedTotal,
+        fbaUnfulfillableTotal,
       });
     }
 
@@ -801,6 +862,9 @@ export async function POST(req: Request) {
       fbaSkusFound,
       fbaByAsinCount,
       amazonProductsCount,
+      fbaInboundTotal,
+      fbaReservedTotal,
+      fbaUnfulfillableTotal,
       ...(debug && { debug }),
     });
   } catch (e) {

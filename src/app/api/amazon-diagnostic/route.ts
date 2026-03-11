@@ -64,6 +64,8 @@ export async function GET() {
                 breakdownsStructure: (JSON.stringify(it.breakdowns ?? it.Breakdowns ?? null) ?? '').slice(0, 1500),
                 contextsAsin: ctx?.find((c) => c.asin)?.asin ?? null,
                 contextsSku: ctx?.find((c) => c.sku)?.sku ?? null,
+                /** AFN=FBA / MFN=FBM。未取得の場合 null */
+                fulfillmentNetwork: (ctx as Array<{ fulfillmentNetwork?: string }> | undefined)?.find((c) => c.fulfillmentNetwork)?.fulfillmentNetwork ?? null,
               };
             })(),
           },
@@ -108,9 +110,29 @@ export async function GET() {
       const summaries = fbaRes?.inventorySummaries ?? fbaRes?.InventorySummaries ?? fbaRes?.payload;
       const arr = Array.isArray(summaries) ? summaries : (summaries as Record<string, unknown>)?.inventorySummaries ?? (summaries as Record<string, unknown>)?.InventorySummaries;
       const list = Array.isArray(arr) ? arr : [];
+      // FBA在庫の集計（全SKU合算）
+      type DiagFbaItem = Record<string, unknown> & {
+        unfulfillableQuantity?: number;
+        reservedQuantity?: { totalReservedQuantity?: number };
+        inventoryDetails?: Record<string, number>;
+        fnSku?: string;
+      };
+      let diagInbound = 0, diagReserved = 0, diagUnfulfillable = 0;
+      for (const item of list as DiagFbaItem[]) {
+        const d = item.inventoryDetails as Record<string, number> | undefined ?? {};
+        diagInbound += (d.inboundWorkingQuantity ?? 0) + (d.inboundShippedQuantity ?? 0) + (d.inboundReceivingQuantity ?? 0);
+        diagReserved += item.reservedQuantity?.totalReservedQuantity ?? 0;
+        diagUnfulfillable += item.unfulfillableQuantity ?? 0;
+      }
       result.fbaInventory = {
         topLevelKeys: Object.keys(fbaRes),
         summariesCount: list.length,
+        /** FBA在庫数量サマリー（全SKU合算） */
+        quantitySummary: {
+          inboundTotal: diagInbound,
+          reservedTotal: diagReserved,
+          unfulfillableTotal: diagUnfulfillable,
+        },
         sampleItem: list[0] ? {
           keys: Object.keys(list[0] as object),
           ...(list[0] as Record<string, unknown>),
