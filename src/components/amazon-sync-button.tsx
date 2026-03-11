@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 type DupCheck = {
   totalAmazonSales?: number;
@@ -11,10 +12,20 @@ type DupCheck = {
   error?: string;
 };
 
+type ResolveResult = {
+  dryRun?: boolean;
+  wouldDeleteCount?: number;
+  deletedCount?: number;
+  groupsProcessed?: number;
+  details?: Array<{ productName: string; sold_at: string; orderId: string | null; keep: { id: string; quantity: number }; remove: Array<{ id: string; quantity: number }> }>;
+  error?: string;
+};
+
 export function AmazonSyncButton() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [dupResult, setDupResult] = useState<DupCheck | null>(null);
+  const [resolvePreview, setResolvePreview] = useState<ResolveResult | null>(null);
   const router = useRouter();
 
   async function handleSync(from?: string) {
@@ -55,6 +66,7 @@ export function AmazonSyncButton() {
 
   async function handleDupCheck() {
     setDupResult(null);
+    setResolvePreview(null);
     try {
       const res = await fetch('/api/amazon-diagnostic');
       const data = await res.json();
@@ -64,6 +76,47 @@ export function AmazonSyncButton() {
       else setDupResult({ error: '取得できませんでした' });
     } catch {
       setDupResult({ error: '通信エラー' });
+    }
+  }
+
+  async function handleResolvePreview() {
+    if (!dupResult?.duplicateOrderGroups || dupResult.duplicateOrderGroups === 0) return;
+    setLoading(true);
+    setResolvePreview(null);
+    try {
+      const res = await fetch('/api/resolve-duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '取得に失敗しました');
+      setResolvePreview(data);
+    } catch (e) {
+      setResolvePreview({ error: e instanceof Error ? e.message : 'エラー' });
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleResolveExecute() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/resolve-duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '実行に失敗しました');
+      setResolvePreview(data);
+      setMessage(`重複${data.deletedCount ?? 0}件を削除しました`);
+      handleDupCheck();
+      router.refresh();
+    } catch (e) {
+      setResolvePreview({ error: e instanceof Error ? e.message : 'エラー' });
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -114,20 +167,33 @@ export function AmazonSyncButton() {
               <p className="font-medium text-amber-900 mb-1">
                 Amazon販売: {dupResult.totalAmazonSales ?? 0}件 / 重複疑いグループ: {dupResult.duplicateOrderGroups ?? 0}件
               </p>
-              {dupResult.duplicateOrderGroups && dupResult.duplicateOrderGroups > 0 && dupResult.duplicateOrderSamples && dupResult.duplicateOrderSamples.length > 0 && (
-                <p className="text-amber-800 text-xs mb-1">
-                  同じ注文ID・日付・数量で複数件あるケースがあります。重複分は削除または修正が必要です。
-                </p>
+              {dupResult.duplicateOrderGroups && dupResult.duplicateOrderGroups > 0 && (
+                <>
+                  <p className="text-amber-800 text-xs mb-1">
+                    同じ注文・日付・商品で複数件あるケースがあります。1件を残して重複を削除できます。
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleResolvePreview}
+                    disabled={loading}
+                    className="mt-1 rounded bg-amber-600 px-3 py-1.5 text-white text-xs font-medium hover:bg-amber-700 disabled:opacity-60"
+                  >
+                    重複の解消内容を確認
+                  </button>
+                </>
               )}
               {dupResult.productSummary && dupResult.productSummary.length > 0 && (
-                <details className="mt-1">
+                <details className="mt-2">
                   <summary className="cursor-pointer text-amber-800">商品別件数（上位20件）</summary>
                   <ul className="mt-1 space-y-0.5 text-xs">
                     {dupResult.productSummary.map((p) => (
                       <li key={p.product_id}>
-                        {p.name}: 販売数{p.sale_count}件 / レコード{p.record_count}件
+                        <Link href={`/products/${p.product_id}?dup=1`} className="text-emerald-700 hover:underline">
+                          {p.name}
+                        </Link>
+                        : 販売数{p.sale_count}件 / レコード{p.record_count}件
                         {p.duplicateOrderIds && p.duplicateOrderIds.length > 0 && (
-                          <span className="text-amber-600 ml-1">⚠重複疑い</span>
+                          <span className="text-amber-600 ml-1">⚠重複</span>
                         )}
                       </li>
                     ))}
@@ -137,6 +203,40 @@ export function AmazonSyncButton() {
             </>
           )}
         </div>
+      )}
+      {resolvePreview && !resolvePreview.error && (
+        <div className="w-full mt-2 p-3 rounded border border-amber-300 bg-white text-sm">
+          <p className="font-medium text-amber-900 mb-1">
+            {resolvePreview.dryRun
+              ? `削除予定: ${resolvePreview.wouldDeleteCount ?? 0}件（${resolvePreview.groupsProcessed ?? 0}グループ）`
+              : `削除完了: ${resolvePreview.deletedCount ?? 0}件`}
+          </p>
+          {resolvePreview.details && resolvePreview.details.length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer text-amber-800">詳細</summary>
+              <ul className="mt-1 space-y-1 text-xs">
+                {resolvePreview.details.map((d, i) => (
+                  <li key={i}>
+                    {d.productName} {d.sold_at}: 残す=個数{d.keep.quantity} / 削除={d.remove.map((r) => `個数${r.quantity}`).join(', ')}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {resolvePreview.dryRun && (resolvePreview.wouldDeleteCount ?? 0) > 0 && (
+            <button
+              type="button"
+              onClick={handleResolveExecute}
+              disabled={loading}
+              className="mt-2 rounded bg-red-600 px-3 py-1.5 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-60"
+            >
+              重複を削除して解消する
+            </button>
+          )}
+        </div>
+      )}
+      {resolvePreview?.error && (
+        <p className="mt-2 text-sm text-red-600">{resolvePreview.error}</p>
       )}
     </div>
   );

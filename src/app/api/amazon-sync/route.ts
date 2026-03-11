@@ -297,8 +297,24 @@ export async function POST(req: Request) {
       } while (nextToken);
     }
 
+    // 重複排除: 同一注文・同一商品（ASIN/SKU）が複数 results に入った場合（API が items を複数返す等）
+    // 手数料情報が多い方を残す
+    const dedupeKey = (r: typeof results[0]) =>
+      `${r.orderId ?? 'unk'}|${r.asin ?? ''}|${r.sku ?? ''}|${r.postedDate}`;
+    const deduped = new Map<string, typeof results[0]>();
+    for (const r of results) {
+      const key = dedupeKey(r);
+      const prev = deduped.get(key);
+      if (!prev || r.feeYen + r.shippingYen > prev.feeYen + prev.shippingYen) {
+        deduped.set(key, r);
+      }
+    }
+    const dedupedResults = [...deduped.values()];
+
     const synced: string[] = [];
     const updatedSaleIds = new Set<string>();
+    // 今回の同期で INSERT した (orderId|productId) を追跡（同一取引が残った場合の二重 INSERT 防止）
+    const insertedOrderProducts = new Set<string>();
 
     const tryUpdateSale = async (
       candidates: Array<{ id: string; product_id: string; quantity: number }>,
@@ -330,7 +346,7 @@ export async function POST(req: Request) {
       return false;
     };
 
-    for (const r of results) {
+    for (const r of dedupedResults) {
       const saleKey = `${r.orderId ?? 'unk'}-${r.postedDate}-${r.unitPrice}-${r.quantity}`;
 
       const tryMatchAndUpdate = async (
@@ -484,6 +500,22 @@ export async function POST(req: Request) {
         .eq('quantity', r.quantity);
       if (existingByKeys && existingByKeys.length > 0 && (await tryUpdateSale(existingByKeys, r, r.orderId ?? undefined))) continue;
 
+      // 最終 INSERT ガード: orderId がある場合、今回の同期内で同一 orderId+product を既に INSERT 済みならスキップ
+      // また DB 上に同一 orderId+product が既に存在する場合もスキップ（過去の同期で登録済み）
+      if (r.orderId) {
+        const runKey = `${r.orderId}|${productId}`;
+        if (insertedOrderProducts.has(runKey)) continue;
+        const { data: existingFinal } = await supabase
+          .from('sales')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('amazon_order_id', r.orderId)
+          .eq('product_id', productId)
+          .limit(1)
+          .maybeSingle();
+        if (existingFinal) continue;
+      }
+
       const grossProfit = (r.unitPrice - r.feeYen - r.adSpendYen - r.shippingYen - costYen) * r.quantity;
       const totalFeeYen = r.feeYen * r.quantity;
       const totalShippingYen = r.shippingYen * r.quantity;
@@ -502,7 +534,10 @@ export async function POST(req: Request) {
         amazon_order_id: r.orderId ?? undefined,
       });
 
-      if (!saleErr) synced.push(saleKey);
+      if (!saleErr) {
+        synced.push(saleKey);
+        if (r.orderId) insertedOrderProducts.add(`${r.orderId}|${productId}`);
+      }
     }
 
     // --- 在庫同期: FBA + FBM を SKU ベースで反映 ---

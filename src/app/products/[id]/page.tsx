@@ -11,16 +11,17 @@ import { ProductDeleteButton } from '@/components/product-delete-button';
 import { SaleRowActions } from '@/components/sale-row-actions';
 import { DefaultShippingSelector } from './default-shipping-selector';
 import { StockAgeBadge } from '@/components/stock-age-badge';
+import { DuplicateDetailSection } from '@/components/duplicate-detail-section';
 
 export default async function ProductDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ from?: string; returnTo?: string }>;
+  searchParams: Promise<{ from?: string; returnTo?: string; dup?: string }>;
 }) {
   const { id } = await params;
-  const { from, returnTo } = await searchParams;
+  const { from, returnTo, dup } = await searchParams;
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -277,6 +278,9 @@ export default async function ProductDetailPage({
 
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="font-bold text-lg mb-4">販売履歴</h2>
+          {dup === '1' && (product as { platform?: string | null }).platform === 'amazon' && (
+            <DuplicateDetailSection productId={id} />
+          )}
           {(product as { platform?: string | null }).platform === 'amazon' && (
             <p className="text-xs text-slate-500 mb-3">
               単価＝お客様の支払額／個数　粗利＝(単価×個数)－手数料－送料－広告費－(原価×個数)　※Amazon API同期
