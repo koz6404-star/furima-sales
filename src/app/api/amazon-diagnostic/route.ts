@@ -142,6 +142,56 @@ export async function GET() {
       result.dbAmazonProducts = { error: (db as Error)?.message ?? String(db) };
     }
 
+    // 5. 重複疑いの販売履歴チェック（キャンディ等で件数が実際より多い場合の診断）
+    try {
+      const { data: amazonSales } = await supabase
+        .from('sales')
+        .select('id, product_id, sold_at, unit_price_yen, quantity, amazon_order_id')
+        .eq('user_id', user.id)
+        .eq('platform', 'amazon');
+      const sales = amazonSales ?? [];
+      const byProduct = new Map<string, { count: number; name: string; rows: typeof sales }>();
+      // 同一 orderId+sold_at+quantity+product_id で複数ある = 真の重複（同商品が同じ注文で重複登録）
+      const orderProductGroups = new Map<string, typeof sales>();
+      for (const s of sales) {
+        const k = `${s.amazon_order_id ?? 'null'}-${s.sold_at}-${s.quantity}-${s.product_id}`;
+        if (!orderProductGroups.has(k)) orderProductGroups.set(k, []);
+        orderProductGroups.get(k)!.push(s);
+      }
+      const duplicateOrderKeys = [...orderProductGroups.entries()].filter(([, v]) => v.length > 1);
+      const { data: prods } = await supabase
+        .from('products')
+        .select('id, name')
+        .eq('user_id', user.id);
+      const prodMap = new Map((prods ?? []).map((p) => [p.id, p.name]));
+      for (const s of sales) {
+        const name = prodMap.get(s.product_id) ?? '(不明)';
+        if (!byProduct.has(s.product_id)) {
+          byProduct.set(s.product_id, { count: 0, name, rows: [] });
+        }
+        const ent = byProduct.get(s.product_id)!;
+        ent.count += s.quantity;
+        ent.rows.push(s);
+      }
+      const productSummary = [...byProduct.entries()].map(([pid, v]) => ({
+        product_id: pid,
+        name: v.name,
+        sale_count: v.count,
+        record_count: v.rows.length,
+        duplicateOrderIds: [...new Set(v.rows
+          .filter((r) => r.amazon_order_id && orderProductGroups.get(`${r.amazon_order_id}-${r.sold_at}-${r.quantity}-${r.product_id}`)?.length > 1)
+          .map((r) => r.amazon_order_id!))],
+      }));
+      result.duplicateCheck = {
+        totalAmazonSales: sales.length,
+        duplicateOrderGroups: duplicateOrderKeys.length,
+        duplicateOrderSamples: duplicateOrderKeys.slice(0, 5).map(([k, v]) => ({ key: k, count: v.length, ids: v.map((s) => s.id) })),
+        productSummary: productSummary.sort((a, b) => b.record_count - a.record_count).slice(0, 20),
+      };
+    } catch (dc: unknown) {
+      result.duplicateCheck = { error: (dc as Error)?.message ?? String(dc) };
+    }
+
     result._help = {
       sellerId: '商取引アカウントID = 既に持っているAmazon出品者アカウントのID。新規作成不要。セラーセントラルで確認し、Vercel環境変数 AMAZON_SELLER_ID に設定。',
       fbmAsin: 'FBM商品でSKUがpr_形式の場合、ASINで在庫検索します。AMAZON_SELLER_ID設定が必要。',

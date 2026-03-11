@@ -3,9 +3,18 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
+type DupCheck = {
+  totalAmazonSales?: number;
+  duplicateOrderGroups?: number;
+  duplicateOrderSamples?: Array<{ key: string; count: number; ids: string[] }>;
+  productSummary?: Array<{ product_id: string; name: string; sale_count: number; record_count: number; duplicateOrderIds?: string[] }>;
+  error?: string;
+};
+
 export function AmazonSyncButton() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [dupResult, setDupResult] = useState<DupCheck | null>(null);
   const router = useRouter();
 
   async function handleSync(from?: string) {
@@ -44,6 +53,20 @@ export function AmazonSyncButton() {
     }
   }
 
+  async function handleDupCheck() {
+    setDupResult(null);
+    try {
+      const res = await fetch('/api/amazon-diagnostic');
+      const data = await res.json();
+      const dc = data.duplicateCheck as DupCheck | undefined;
+      if (dc?.error) setDupResult({ error: dc.error });
+      else if (dc) setDupResult(dc);
+      else setDupResult({ error: '取得できませんでした' });
+    } catch {
+      setDupResult({ error: '通信エラー' });
+    }
+  }
+
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
       <button
@@ -72,7 +95,49 @@ export function AmazonSyncButton() {
       >
         手数料・送料を再取得
       </button>
+      <button
+        type="button"
+        onClick={handleDupCheck}
+        disabled={loading}
+        className="rounded border border-amber-500 px-4 py-2 text-amber-700 font-medium hover:bg-amber-50 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+        title="販売履歴の重複をチェック（同じ注文で複数件登録されていないか）"
+      >
+        重複チェック
+      </button>
       {message && <span className="text-sm text-slate-600">{message}</span>}
+      {dupResult && (
+        <div className="w-full mt-2 p-3 rounded border border-amber-200 bg-amber-50 text-sm">
+          {dupResult.error ? (
+            <p className="text-amber-800">{dupResult.error}</p>
+          ) : (
+            <>
+              <p className="font-medium text-amber-900 mb-1">
+                Amazon販売: {dupResult.totalAmazonSales ?? 0}件 / 重複疑いグループ: {dupResult.duplicateOrderGroups ?? 0}件
+              </p>
+              {dupResult.duplicateOrderGroups && dupResult.duplicateOrderGroups > 0 && dupResult.duplicateOrderSamples && dupResult.duplicateOrderSamples.length > 0 && (
+                <p className="text-amber-800 text-xs mb-1">
+                  同じ注文ID・日付・数量で複数件あるケースがあります。重複分は削除または修正が必要です。
+                </p>
+              )}
+              {dupResult.productSummary && dupResult.productSummary.length > 0 && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-amber-800">商品別件数（上位20件）</summary>
+                  <ul className="mt-1 space-y-0.5 text-xs">
+                    {dupResult.productSummary.map((p) => (
+                      <li key={p.product_id}>
+                        {p.name}: 販売数{p.sale_count}件 / レコード{p.record_count}件
+                        {p.duplicateOrderIds && p.duplicateOrderIds.length > 0 && (
+                          <span className="text-amber-600 ml-1">⚠重複疑い</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
