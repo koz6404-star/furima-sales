@@ -559,7 +559,10 @@ export async function POST(req: Request) {
             // FBM在庫取得失敗（未出品等）はスキップ
           }
         }
-        const finalQty = qty ?? 0;
+        // FBA/FBMでマッチしなかった商品は更新しない（0で上書きして既存在庫を消さない）
+        if (qty === undefined) continue;
+
+        const finalQty = qty;
 
         const { error: updErr } = await supabase
           .from('products')
