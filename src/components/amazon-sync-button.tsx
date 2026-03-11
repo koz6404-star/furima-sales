@@ -21,11 +21,23 @@ type ResolveResult = {
   error?: string;
 };
 
+type ResetResult = {
+  ok?: boolean;
+  dryRun?: boolean;
+  wouldDeleteSales?: number;
+  wouldResetProducts?: number;
+  deletedSales?: number;
+  resetProducts?: number;
+  message?: string;
+  error?: string;
+};
+
 export function AmazonSyncButton() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [dupResult, setDupResult] = useState<DupCheck | null>(null);
   const [resolvePreview, setResolvePreview] = useState<ResolveResult | null>(null);
+  const [resetPreview, setResetPreview] = useState<ResetResult | null>(null);
   const router = useRouter();
 
   async function handleSync(from?: string) {
@@ -120,6 +132,46 @@ export function AmazonSyncButton() {
     }
   }
 
+  async function handleResetPreview() {
+    setResetPreview(null);
+    try {
+      const res = await fetch('/api/reset-amazon-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '取得に失敗しました');
+      setResetPreview(data);
+    } catch (e) {
+      setResetPreview({ error: e instanceof Error ? e.message : 'エラー' });
+    }
+  }
+
+  async function handleResetExecute() {
+    if (!confirm('本当にAmazonの販売履歴と在庫をすべて削除しますか？削除後は「初回取込」で再取り込みが必要です。')) return;
+    setLoading(true);
+    setResetPreview(null);
+    try {
+      const res = await fetch('/api/reset-amazon-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '実行に失敗しました');
+      setResetPreview(data);
+      setMessage(data.message ?? 'リセット完了');
+      setDupResult(null);
+      setResolvePreview(null);
+      router.refresh();
+    } catch (e) {
+      setResetPreview({ error: e instanceof Error ? e.message : 'エラー' });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
       <button
@@ -156,6 +208,15 @@ export function AmazonSyncButton() {
         title="販売履歴の重複をチェック（同じ注文で複数件登録されていないか）"
       >
         重複チェック
+      </button>
+      <button
+        type="button"
+        onClick={handleResetPreview}
+        disabled={loading}
+        className="rounded border border-red-400 px-4 py-2 text-red-600 font-medium hover:bg-red-50 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+        title="Amazonの販売履歴・在庫をすべて削除し、一から再取り込みできる状態にする"
+      >
+        Amazonデータをリセット
       </button>
       {message && <span className="text-sm text-slate-600">{message}</span>}
       {dupResult && (
@@ -237,6 +298,34 @@ export function AmazonSyncButton() {
       )}
       {resolvePreview?.error && (
         <p className="mt-2 text-sm text-red-600">{resolvePreview.error}</p>
+      )}
+      {resetPreview && !resetPreview.error && (
+        <div className="w-full mt-2 p-3 rounded border border-red-200 bg-red-50 text-sm">
+          <p className="font-medium text-red-900 mb-1">
+            {resetPreview.dryRun
+              ? `削除予定: 販売${resetPreview.wouldDeleteSales ?? 0}件、在庫リセット${resetPreview.wouldResetProducts ?? 0}件`
+              : resetPreview.message}
+          </p>
+          {resetPreview.dryRun && ((resetPreview.wouldDeleteSales ?? 0) > 0 || (resetPreview.wouldResetProducts ?? 0) > 0) && (
+            <>
+              <p className="text-red-800 text-xs mb-2">実行後は「初回取込（2月～）」で再取り込みしてください。</p>
+              <button
+                type="button"
+                onClick={handleResetExecute}
+                disabled={loading}
+                className="rounded bg-red-600 px-3 py-1.5 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-60"
+              >
+                リセットを実行する
+              </button>
+            </>
+          )}
+          {resetPreview.dryRun && (resetPreview.wouldDeleteSales ?? 0) === 0 && (resetPreview.wouldResetProducts ?? 0) === 0 && (
+            <p className="text-red-700 text-xs">リセット対象のAmazonデータがありません。</p>
+          )}
+        </div>
+      )}
+      {resetPreview?.error && (
+        <p className="mt-2 text-sm text-red-600">{resetPreview.error}</p>
       )}
     </div>
   );
