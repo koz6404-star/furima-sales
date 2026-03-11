@@ -27,11 +27,14 @@ export function AmazonSyncButton() {
       if (!res.ok) throw new Error((data.error as string) || text || '同期に失敗しました');
       const inv = Number(data.inventoryUpdated ?? 0);
       const fbaSkus = Number(data.fbaSkusFound ?? 0);
+      const fbaAsins = Number(data.fbaByAsinCount ?? 0);
       const invErr = data.inventoryError;
+      const debug = data.debug as string | undefined;
       let msg = `取得: ${data.transactionsFound ?? 0}件、登録: ${data.synced ?? 0}件`;
       if (inv > 0) msg += `、在庫更新: ${inv}件`;
-      if (fbaSkus > 0) msg += `（FBA SKU: ${fbaSkus}件）`;
+      if (fbaSkus > 0 || fbaAsins > 0) msg += `（FBA: SKU ${fbaSkus}件、ASIN ${fbaAsins}件）`;
       if (invErr) msg += ` ※${invErr}`;
+      if (debug) msg += ` ${debug}`;
       setMessage(msg);
       router.refresh();
     } catch (e) {

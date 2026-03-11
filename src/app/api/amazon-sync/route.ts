@@ -393,11 +393,14 @@ export async function POST(req: Request) {
     const sellerId = process.env.AMAZON_SELLER_ID?.trim();
     let inventoryUpdated = 0;
     let fbaSkusFound = 0;
+    let fbaByAsinCount = 0;
+    let amazonProductsCount = 0;
     try {
       // sellerId が無くても FBA 在庫は取得可能（getInventorySummaries は sellerId 不要）
       const hasSellerIdForFbm = !!sellerId;
 
       const fbaMap = new Map<string, { qty: number; productName: string }>();
+      const fbaByAsin = new Map<string, { qty: number; sku: string | null; productName: string }>();
 
       // FBA在庫取得（getInventorySummaries）
       let nextToken: string | undefined;
@@ -417,47 +420,75 @@ export async function POST(req: Request) {
         // レスポンスは payload 経由や pagination マージで返る場合がある
         const rawRes = fbaRes as Record<string, unknown>;
         const fbaPayload = (rawRes?.payload as Record<string, unknown>) ?? rawRes;
-        const summaries = (fbaRes?.inventorySummaries ?? fbaPayload?.inventorySummaries ?? rawRes?.inventorySummaries ?? rawRes?.InventorySummaries ?? []) as Array<{
+        // ライブラリは pagination + payload をマージして返す: { nextToken, inventorySummaries, granularity } 等
+        const summariesRaw = fbaRes?.inventorySummaries ?? fbaPayload?.inventorySummaries ?? (rawRes?.payload as Record<string, unknown>)?.inventorySummaries ?? rawRes?.inventorySummaries ?? rawRes?.InventorySummaries ?? [];
+        const summaries = Array.isArray(summariesRaw) ? summariesRaw : [];
+        nextToken = (fbaRes?.nextToken ?? fbaPayload?.nextToken ?? rawRes?.nextToken) as string | undefined;
+        type SummaryItem = {
           sellerSku?: string;
           SellerSku?: string;
+          asin?: string;
+          Asin?: string;
           fulfillableQuantity?: number;
           FulfillableQuantity?: number;
           totalQuantity?: number;
           TotalQuantity?: number;
           productName?: string;
           ProductName?: string;
-          inventoryDetails?: { fulfillableQuantity?: number };
-        }>;
-        nextToken = (fbaRes?.nextToken ?? fbaPayload?.nextToken ?? rawRes?.nextToken) as string | undefined;
-        for (const s of summaries) {
-          const sku = s.sellerSku ?? (s as { SellerSku?: string }).SellerSku;
-          if (sku) {
-            const details = s.inventoryDetails;
-            const qty =
-              s.fulfillableQuantity ?? (s as { FulfillableQuantity?: number }).FulfillableQuantity ??
-              details?.fulfillableQuantity ??
-              s.totalQuantity ?? (s as { TotalQuantity?: number }).TotalQuantity ?? 0;
-            const productName = s.productName ?? s.ProductName ?? `Amazon ${sku}`;
-            fbaMap.set(sku, { qty, productName });
+          inventoryDetails?: { fulfillableQuantity?: number; FulfillableQuantity?: number };
+          InventoryDetails?: { fulfillableQuantity?: number; FulfillableQuantity?: number };
+        };
+        // inventoryDetails のキーが表記揺れ（Unicode等）の場合に備え、オブジェクト走査で quantity を探す
+        const extractFulfillable = (obj: unknown): number | undefined => {
+          if (obj == null || typeof obj !== 'object') return undefined;
+          const o = obj as Record<string, unknown>;
+          for (const k of ['fulfillableQuantity', 'FulfillableQuantity'] as const) {
+            const v = o[k];
+            if (typeof v === 'number') return v;
           }
+          const keys = Object.keys(o).filter((key) => /fulfillable/i.test(key));
+          for (const key of keys) {
+            const v = o[key];
+            if (typeof v === 'number') return v;
+          }
+          return undefined;
+        };
+        for (const s of summaries as SummaryItem[]) {
+          const sku = s.sellerSku ?? s.SellerSku;
+          const asinVal = s.asin ?? s.Asin;
+          const details = s.inventoryDetails ?? s.InventoryDetails ?? (s as Record<string, unknown>).inventoryDetails;
+          const qty =
+            s.fulfillableQuantity ?? s.FulfillableQuantity ??
+            extractFulfillable(details) ??
+            s.totalQuantity ?? s.TotalQuantity ?? 0;
+          const productName = s.productName ?? s.ProductName ?? `Amazon ${sku ?? asinVal ?? '?'}`;
+          if (sku) fbaMap.set(sku, { qty, productName });
+          if (asinVal) fbaByAsin.set(asinVal, { qty, sku: sku ?? null, productName });
         }
       } while (nextToken);
       fbaSkusFound = fbaMap.size;
+      fbaByAsinCount = fbaByAsin.size;
 
       // FBAに在庫がありproductsに無いSKU → 新規商品作成（売上なしでも出品中商品を一覧に表示するため）
       const existingSkuSet = new Set<string>();
-      const { data: amazonProducts } = await supabase
+      // 全Amazon商品を取得し、SKU/ASINのいずれかがあるものを対象（.or構文の互換性問題を回避）
+      const { data: allAmazon } = await supabase
         .from('products')
-        .select('id, sku')
+        .select('id, sku, asin')
         .eq('user_id', user.id)
-        .eq('platform', 'amazon')
-        .not('sku', 'is', null);
+        .eq('platform', 'amazon');
+      const amazonProducts = (allAmazon ?? []).filter((p) => (p.sku?.trim() ?? '') !== '' || (p.asin?.trim() ?? '') !== '');
+      amazonProductsCount = amazonProducts.length;
 
+      const existingAsinSet = new Set<string>();
       for (const p of amazonProducts ?? []) {
         if (p.sku?.trim()) existingSkuSet.add(p.sku.trim());
+        if (p.asin?.trim()) existingAsinSet.add(p.asin.trim());
       }
       for (const [sku, { qty, productName }] of fbaMap) {
         if (qty <= 0 || existingSkuSet.has(sku)) continue;
+        const fbaAsin = [...fbaByAsin.entries()].find(([, v]) => v.sku === sku)?.[0];
+        if (fbaAsin && existingAsinSet.has(fbaAsin)) continue;
         const { data: newProd } = await supabase
           .from('products')
           .insert({
@@ -467,6 +498,7 @@ export async function POST(req: Request) {
             stock: qty,
             platform: 'amazon',
             sku,
+            asin: fbaAsin ?? undefined,
             sku_locked: true,
             stock_received_at: new Date().toISOString().slice(0, 10),
             updated_at: new Date().toISOString(),
@@ -488,13 +520,21 @@ export async function POST(req: Request) {
         }
       }
 
+      // 大文字小文字を無視したマッチ（FBAとDBで表記揺れがある場合対応）
+      const getFbaBySku = (k: string) =>
+        fbaMap.get(k) ?? [...fbaMap.entries()].find(([x]) => x?.toLowerCase() === k?.toLowerCase())?.[1];
+      const getFbaByAsin = (a: string) =>
+        fbaByAsin.get(a) ?? [...fbaByAsin.entries()].find(([x]) => x?.toLowerCase() === a?.toLowerCase())?.[1];
+
       const productsToUpdate = amazonProducts ?? [];
       for (const p of productsToUpdate) {
         const sku = p.sku?.trim();
-        if (!sku) continue;
+        const asin = p.asin?.trim();
+        if (!sku && !asin) continue;
 
-        let qty: number | undefined = fbaMap.get(sku)?.qty;
-        if (qty === undefined && hasSellerIdForFbm) {
+        let qty: number | undefined = sku ? getFbaBySku(sku)?.qty : undefined;
+        if (qty === undefined && asin) qty = getFbaByAsin(asin)?.qty;
+        if (qty === undefined && hasSellerIdForFbm && sku) {
           // FBM在庫取得（getListingsItem）
           await sleep(250); // 0.2 req/sec
           try {
@@ -534,7 +574,7 @@ export async function POST(req: Request) {
           inventoryUpdated += 1;
           const now = new Date().toISOString();
           // product_location_stock: FBA在庫は fba、FBM在庫は warehouse（家は常に0）
-          const isFba = fbaMap.has(sku) && (fbaMap.get(sku)?.qty ?? 0) > 0;
+          const isFba = (sku && (getFbaBySku(sku)?.qty ?? 0) > 0) || (asin && (getFbaByAsin(asin)?.qty ?? 0) > 0);
           await supabase.from('product_location_stock').upsert(
             [
               { product_id: p.id, location: 'home', quantity: 0, updated_at: now },
@@ -560,12 +600,19 @@ export async function POST(req: Request) {
       });
     }
 
+    const debug = fbaSkusFound > 0 && inventoryUpdated === 0
+      ? '※FBA取得済みだが在庫更新0件。SKU/ASIN不一致の可能性→/api/amazon-diagnostic で確認'
+      : undefined;
+
     return NextResponse.json({
       ok: true,
       transactionsFound: results.length,
       synced: synced.length,
       inventoryUpdated,
       fbaSkusFound,
+      fbaByAsinCount,
+      amazonProductsCount,
+      ...(debug && { debug }),
     });
   } catch (e) {
     const err = e as Error & { response?: { body?: string } };

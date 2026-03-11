@@ -49,15 +49,18 @@ export async function GET() {
             totalAmount: t.totalAmount ?? t.TotalAmount,
             itemsCount: (t.items ?? t.Items) ? (t.items as unknown[] ?? t.Items as unknown[])?.length : 0,
             hasBreakdowns: !!(t.breakdowns ?? t.Breakdowns),
-            breakdownsStructure: JSON.stringify(t.breakdowns ?? t.Breakdowns, null, 2).slice(0, 2000),
+            breakdownsStructure: (JSON.stringify(t.breakdowns ?? t.Breakdowns ?? null) ?? '').slice(0, 2000),
             firstItem: (() => {
               const items = (t.items ?? t.Items) as Array<Record<string, unknown>> | undefined;
               const it = items?.[0];
               if (!it) return null;
+              const ctx = (it.contexts ?? it.Contexts) as Array<{ asin?: string; sku?: string }> | undefined;
               return {
                 totalAmount: it.totalAmount ?? it.TotalAmount,
                 hasBreakdowns: !!(it.breakdowns ?? it.Breakdowns),
-                breakdownsStructure: JSON.stringify(it.breakdowns ?? it.Breakdowns, null, 2).slice(0, 1500),
+                breakdownsStructure: (JSON.stringify(it.breakdowns ?? it.Breakdowns ?? null) ?? '').slice(0, 1500),
+                contextsAsin: ctx?.find((c) => c.asin)?.asin ?? null,
+                contextsSku: ctx?.find((c) => c.sku)?.sku ?? null,
               };
             })(),
           },
@@ -94,6 +97,19 @@ export async function GET() {
       };
     } catch (fb: unknown) {
       result.fbaInventory = { error: (fb as Error)?.message ?? String(fb) };
+    }
+
+    // 3. DB上のAmazon商品（SKU/ASIN照合用サンプル）
+    try {
+      const { data: dbProducts } = await supabase
+        .from('products')
+        .select('id, name, sku, asin, stock, platform')
+        .eq('user_id', user.id)
+        .eq('platform', 'amazon')
+        .limit(10);
+      result.dbAmazonProducts = dbProducts ?? [];
+    } catch (db: unknown) {
+      result.dbAmazonProducts = { error: (db as Error)?.message ?? String(db) };
     }
 
     return NextResponse.json(result);
