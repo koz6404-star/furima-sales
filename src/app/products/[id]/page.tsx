@@ -277,6 +277,11 @@ export default async function ProductDetailPage({
 
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="font-bold text-lg mb-4">販売履歴</h2>
+          {(product as { platform?: string | null }).platform === 'amazon' && (
+            <p className="text-xs text-slate-500 mb-3">
+              単価＝お客様の支払額／個数　粗利＝(単価×個数)－手数料－送料－広告費－(原価×個数)　※Amazon API同期
+            </p>
+          )}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

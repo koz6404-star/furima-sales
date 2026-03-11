@@ -295,16 +295,20 @@ export async function POST(req: Request) {
     const orderIds = new Set<string>();
 
     for (const r of results) {
-      const saleKey = `${r.orderId ?? 'unk'}-${r.postedDate}-${r.unitPrice}`;
-      if (r.orderId && orderIds.has(r.orderId)) continue;
-      if (r.orderId) orderIds.add(r.orderId);
+      const saleKey = `${r.orderId ?? 'unk'}-${r.postedDate}-${r.unitPrice}-${r.quantity}`;
+      if (r.orderId && orderIds.has(saleKey)) continue;
+      if (r.orderId) orderIds.add(saleKey);
 
       if (r.orderId) {
+        // 同一注文で複数商品がある場合があるため、単価・個数も含めて1件に絞る
         const { data: dupList } = await supabase
           .from('sales')
           .select('id, product_id, quantity')
           .eq('user_id', user.id)
-          .eq('amazon_order_id', r.orderId);
+          .eq('amazon_order_id', r.orderId)
+          .eq('sold_at', r.postedDate)
+          .eq('unit_price_yen', r.unitPrice)
+          .eq('quantity', r.quantity);
         const dupCheck = dupList?.length === 1 ? dupList[0] : null;
         if (dupCheck) {
           // 既存売上1件のみ：手数料・送料を再取得で上書き更新
@@ -321,19 +325,36 @@ export async function POST(req: Request) {
             updated_at: new Date().toISOString(),
           }).eq('id', dupCheck.id);
           synced.push(saleKey);
-          if (r.orderId) orderIds.add(r.orderId);
           continue;
         }
       } else {
-        const { data: dupCheck } = await supabase
+        // 注文IDなしの場合：日付＋単価＋個数で一致した既存売上にも手数料・送料を反映
+        const { data: dupListByDate } = await supabase
           .from('sales')
-          .select('id')
+          .select('id, product_id, quantity')
           .eq('user_id', user.id)
           .eq('platform', 'amazon')
           .eq('sold_at', r.postedDate)
           .eq('unit_price_yen', r.unitPrice)
-          .limit(1);
-        if (dupCheck && dupCheck.length > 0) continue;
+          .eq('quantity', r.quantity)
+          .limit(2);
+        const dupByDate = dupListByDate?.length === 1 ? dupListByDate[0] : null;
+        if (dupByDate) {
+          const { data: prod } = await supabase.from('products').select('cost_yen').eq('id', dupByDate.product_id).single();
+          const costYen = prod?.cost_yen ?? 0;
+          const grossProfit = (r.unitPrice - r.feeYen - r.adSpendYen - r.shippingYen - costYen) * r.quantity;
+          await supabase.from('sales').update({
+            fee_yen: r.feeYen * r.quantity,
+            shipping_yen: r.shippingYen * r.quantity,
+            ad_spend_yen: r.adSpendYen * r.quantity,
+            gross_profit_yen: grossProfit,
+            unit_price_yen: r.unitPrice,
+            quantity: r.quantity,
+            updated_at: new Date().toISOString(),
+          }).eq('id', dupByDate.id);
+          synced.push(saleKey);
+          continue;
+        }
       }
 
       let productId: string;

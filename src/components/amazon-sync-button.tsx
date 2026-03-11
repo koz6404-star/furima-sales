@@ -63,6 +63,15 @@ export function AmazonSyncButton() {
       >
         初回取込（2月～）
       </button>
+      <button
+        type="button"
+        onClick={() => handleSync('2025-09-01')}
+        disabled={loading}
+        className="rounded border border-slate-400 px-4 py-2 text-slate-600 font-medium hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+        title="既存の販売履歴に手数料・送料を反映（9月～の取引を再取得）"
+      >
+        手数料・送料を再取得
+      </button>
       {message && <span className="text-sm text-slate-600">{message}</span>}
     </div>
   );

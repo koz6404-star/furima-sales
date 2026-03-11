@@ -39,6 +39,9 @@ export async function GET() {
       }) as { transactions?: unknown[]; Transactions?: unknown[] };
       const txs = financeRes.transactions ?? financeRes.Transactions ?? [];
       const tx = Array.isArray(txs) && txs.length > 0 ? txs[0] : null;
+      const shipmentTx = (txs as Array<Record<string, unknown>>).find(
+        (t) => (t.transactionType ?? t.TransactionType ?? '') === 'Shipment'
+      );
       if (tx) {
         const t = tx as Record<string, unknown>;
         result.finances = {
@@ -64,6 +67,24 @@ export async function GET() {
               };
             })(),
           },
+          feeShippingFromShipment: shipmentTx ? (() => {
+            const items = (shipmentTx.items ?? shipmentTx.Items) as Array<Record<string, unknown>> | undefined;
+            const bd = items?.[0]?.breakdowns ?? items?.[0]?.Breakdowns ?? (items?.length === 1 ? (shipmentTx.breakdowns ?? shipmentTx.Breakdowns) : null);
+            const parseAmt = (v: unknown) => (v && typeof v === 'object' && 'currencyAmount' in v ? (v as { currencyAmount?: number }).currencyAmount : (v as { CurrencyAmount?: number })?.CurrencyAmount) ?? 0;
+            let f = 0; let s = 0;
+            const scan = (list: unknown[]) => {
+              for (const b of list as Array<{ breakdownType?: string; BreakdownType?: string; breakdownAmount?: unknown; BreakdownAmount?: unknown; breakdowns?: unknown; Breakdowns?: unknown }>) {
+                const kids = b.breakdowns ?? b.Breakdowns;
+                if (Array.isArray(kids) && kids.length > 0) { scan(kids); continue; }
+                const amt = Math.abs(parseAmt(b.breakdownAmount ?? (b as { BreakdownAmount?: unknown }).BreakdownAmount));
+                const t = ((b.breakdownType ?? (b as { BreakdownType?: string }).BreakdownType) || '').toLowerCase();
+                if (t.includes('shipping') || (t.includes('postage') && !t.includes('vat'))) s += amt;
+                else if (t.includes('commission') || t.includes('referral') || t.includes('fba') || t.includes('fee') || t.includes('vat')) f += amt;
+              }
+            };
+            if (Array.isArray(bd)) scan(bd); else if (bd && typeof bd === 'object') scan(Array.isArray((bd as { breakdowns?: unknown }).breakdowns) ? (bd as { breakdowns: unknown[] }).breakdowns : []);
+            return { feeYen: f, shippingYen: s };
+          })() : null,
         };
       } else {
         result.finances = { transactionsCount: 0, message: '取引がありません（直近7日）' };
