@@ -45,9 +45,9 @@ function sleep(ms: number): Promise<void> {
 }
 
 function parseAmount(val: { currencyAmount?: number; CurrencyAmount?: number } | undefined): number {
-  if (!val) return 0;
-  const amt = val.currencyAmount ?? val.CurrencyAmount;
-  if (amt == null) return 0;
+  if (!val || typeof val !== 'object') return 0;
+  const amt = val.currencyAmount ?? (val as { CurrencyAmount?: number }).CurrencyAmount;
+  if (amt == null || typeof amt !== 'number') return 0;
   return Math.round(amt);
 }
 
@@ -73,6 +73,15 @@ function findSku(contexts?: Array<{ sku?: string }>): string | null {
   return null;
 }
 
+type BreakdownItem = {
+  breakdownType?: string;
+  BreakdownType?: string;
+  breakdownAmount?: unknown;
+  BreakdownAmount?: unknown;
+  breakdowns?: unknown;
+  Breakdowns?: unknown;
+};
+
 /** ネストした breakdowns を再帰的に走査。葉ノード（明細）のみ手数料・広告・送料を集計（二重計上防止） */
 function getFeeBreakdown(breakdowns: unknown): {
   feeYen: number;
@@ -82,41 +91,52 @@ function getFeeBreakdown(breakdowns: unknown): {
   let feeYen = 0;
   let adSpendYen = 0;
   let shippingYen = 0;
-  const arr: Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number }; breakdowns?: unknown }> = [];
+  const arr: BreakdownItem[] = [];
   if (Array.isArray(breakdowns)) {
-    arr.push(...breakdowns);
-  } else if (breakdowns && typeof breakdowns === 'object' && 'breakdowns' in breakdowns) {
-    const inner = (breakdowns as { breakdowns?: unknown }).breakdowns;
-    if (Array.isArray(inner)) arr.push(...inner);
+    arr.push(...(breakdowns as BreakdownItem[]));
+  } else if (breakdowns && typeof breakdowns === 'object') {
+    const o = breakdowns as { breakdowns?: unknown; Breakdowns?: unknown };
+    const inner = o.breakdowns ?? o.Breakdowns;
+    if (Array.isArray(inner)) arr.push(...(inner as BreakdownItem[]));
   }
-  function process(list: Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number }; breakdowns?: unknown }>) {
+  function process(list: BreakdownItem[]) {
     for (const b of list) {
-      const children = b.breakdowns as Array<{ breakdownType?: string }> | undefined;
+      const children = (b.breakdowns ?? b.Breakdowns) as BreakdownItem[] | undefined;
       const hasNonEmptyChildren = Array.isArray(children) && children.length > 0;
       if (hasNonEmptyChildren) {
-        process(children as Array<{ breakdownType?: string; breakdownAmount?: { currencyAmount?: number }; breakdowns?: unknown }>);
+        process(children);
         continue; // 親は集計せず子のみ
       }
-      const amt = parseAmount(b.breakdownAmount);
+      const amt = parseAmount((b.breakdownAmount ?? b.BreakdownAmount) as { currencyAmount?: number; CurrencyAmount?: number });
       const absAmt = Math.abs(amt);
-      const type = (b.breakdownType || '').toLowerCase();
-      // 売上本体・税（OurPriceTax等）はスキップ
-      if (type.includes('ourpriceprincipal') || type.includes('principal') || type.includes('principle')) continue;
-      if (type.includes('ourpricetax')) continue; // 売上税はスキップ
-      if (type.includes('sales') || type.includes('productcharges') || type.includes('product charges') || type.includes('expenses')) continue;
-      // 手数料・費用（AmazonFees, Commission, Base 等の葉）
-      if (type.includes('commission') || type.includes('referral') || type.includes('amazonfees') || type.includes('base')) {
-        feeYen += absAmt;
-      } else if (type.includes('fba') || (type.includes('fee') && !type.includes('ad'))) {
-        feeYen += absAmt;
+      const type = ((b.breakdownType ?? b.BreakdownType) || '').toLowerCase();
+      // 売上本体・税（OurPricePrincipal等）はスキップ
+      if (type.includes('ourpriceprincipal') || (type.includes('principal') && type.includes('ourprice')) || type.includes('principle')) continue;
+      if (type.includes('ourpricetax') || (type === 'tax' && amt > 0)) continue; // 売上税はスキップ
+      if (type === 'sales' || type.includes('productcharges') || type.includes('product charges')) continue;
+      if (type === 'expenses') continue; // 親カテゴリのみスキップ、子は処理される
+      // 送料・配送関連（ShippingServiceCharges, PostageBilling_Postage等。VATは手数料扱い）
+      if (
+        (type.includes('shipping') || (type.includes('postage') && !type.includes('vat')) || type.includes('delivery') || type.includes('配送'))
+      ) {
+        shippingYen += absAmt;
       } else if (type.includes('ad') || type.includes('advertising') || type.includes('sponsored') || type.includes('ppc')) {
         adSpendYen += absAmt;
-      } else if (type.includes('shipping') || type.includes('fulfillment') || type.includes('配送')) {
-        shippingYen += absAmt;
-      } else if (type === 'tax' && amt < 0) {
-        // Commission内のTax（-11など）は手数料として集計
+      } else if (
+        type.includes('commission') ||
+        type.includes('referral') ||
+        type.includes('amazonfees') ||
+        type.includes('amazon fee') ||
+        type.includes('fba') && (type.includes('fee') || type.includes('fulfillment') || type.includes('storage')) ||
+        (type.includes('fee') && !type.includes('ad')) ||
+        type.includes('variableclosingfee') ||
+        type.includes('base') ||
+        (type === 'tax' && amt < 0) ||
+        type.includes('vat') && amt < 0
+      ) {
         feeYen += absAmt;
       } else if (type.length > 0 && absAmt > 0 && !type.includes('ourprice')) {
+        // その他の費用（Other, PostageBilling_VAT等）は手数料扱い
         feeYen += absAmt;
       }
     }
