@@ -1,0 +1,10 @@
+---
+description: 変更後は必ずGit pushする（ユーザーに言われなくても実行）
+alwaysApply: true
+---
+
+# Git Push
+
+- コードや設定の変更を行ったら、**必ず** `git add` → `git commit` → `git push` を実行する
+- ユーザーから「pushして」と言われなくても、変更完了時点で自動的に push する
+- `.env.local` や `supabase/.temp/` など機密情報を含むファイルはコミットしない
