@@ -1,0 +1,26 @@
+# main ブランチへの push 時に Supabase マイグレーションを自動実行
+# 事前に GitHub リポジトリの Secrets に SUPABASE_DB_URL を登録してください
+name: Supabase Migration
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run migrations
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: npm run supabase-migrate

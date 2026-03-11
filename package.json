@@ -14,7 +14,8 @@
     "test:e2e": "playwright test",
     "excel-template": "node scripts/generate-excel-template.mjs",
     "remove-checkerboard": "node scripts/remove-checkerboard.mjs",
-    "supabase-setup": "node scripts/supabase-setup.mjs"
+    "supabase-setup": "node scripts/supabase-setup.mjs",
+    "supabase-migrate": "node scripts/supabase-migrate.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.8.0",

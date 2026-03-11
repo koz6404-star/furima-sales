@@ -40,6 +40,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# supabase (supabase link で生成されるローカル設定)
+supabase/.temp/
+
 # playwright
 playwright-report/
 test-results/

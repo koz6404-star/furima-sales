@@ -282,7 +282,8 @@ GRANT EXECUTE ON FUNCTION delete_product_with_stock_restore(UUID, UUID) TO authe
 2. 対象プロジェクト（koz6404-star's Project）を選択
 3. 左メニュー **Settings** → **Database**
 4. 「**Connection string**」セクションで **URI** を選択
-5. 表示された文字列をコピー（例: `postgresql://postgres.[ref]:[YOUR-PASSWORD]@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres`）
+5. 表示された文字列をコピー（**Session pooler** を選択。「Direct connection」は IPv4 で失敗しやすい）
+   ※ホスト名（aws-0-ap-northeast-1 等）はプロジェクトのリージョンで異なります。表示をそのまま使用してください。
 6. **`[YOUR-PASSWORD]` をプロジェクト作成時に設定したデータベースパスワードに置き換える**
    - パスワードを忘れた場合: Settings → Database → 「Reset database password」
 
@@ -303,14 +304,15 @@ GRANT EXECUTE ON FUNCTION delete_product_with_stock_restore(UUID, UUID) TO authe
 既存の内容の**下に**、次の行をコピー＆ペーストして追加:
 
 ```
-SUPABASE_DB_URL=postgresql://postgres.ewxzsftkxkqrvhjavrfd:あなたのパスワード@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres
+SUPABASE_DB_URL=postgresql://postgres.ewxzsftkxkqrvhjavrfd:あなたのパスワード@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres
 ```
+
+**重要**: 上記のホスト名（`aws-1-ap-southeast-1`）はプロジェクトのリージョンにより異なります。
+Connect モーダルで「Session pooler」を選択し、表示された URI をそのままコピーして `[YOUR-PASSWORD]` のみ置き換えてください。
 
 ### ステップ3: パスワードを置き換え
 
 `あなたのパスワード` の部分を、Supabase のデータベースパスワード（実際の文字列）に書き換える。
-
-※ リージョン（`ap-northeast-1` 等）は Supabase の Connect で表示された URI を確認してください。
 
 ## 3. セットアップスクリプトを実行
 
