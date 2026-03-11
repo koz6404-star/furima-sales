@@ -179,7 +179,7 @@ export async function GET() {
         sale_count: v.count,
         record_count: v.rows.length,
         duplicateOrderIds: [...new Set(v.rows
-          .filter((r) => r.amazon_order_id && orderProductGroups.get(`${r.amazon_order_id}-${r.sold_at}-${r.quantity}-${r.product_id}`)?.length > 1)
+          .filter((r) => r.amazon_order_id && (orderProductGroups.get(`${r.amazon_order_id}-${r.sold_at}-${r.quantity}-${r.product_id}`) ?? []).length > 1)
           .map((r) => r.amazon_order_id!))],
       }));
       result.duplicateCheck = {
