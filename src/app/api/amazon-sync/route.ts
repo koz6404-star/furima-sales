@@ -453,10 +453,16 @@ export async function POST(req: Request) {
           }
           return undefined;
         };
+        const getDetails = (obj: Record<string, unknown>) => {
+          const d = obj.inventoryDetails ?? obj.InventoryDetails;
+          if (d && typeof d === 'object') return d as Record<string, unknown>;
+          const key = Object.keys(obj).find((k) => /inventorydetail/i.test(k.replace(/\s|\u200B|\u200C|\u200D|\uFEFF/g, '')));
+          return key ? (obj[key] as Record<string, unknown>) : undefined;
+        };
         for (const s of summaries as SummaryItem[]) {
           const sku = s.sellerSku ?? s.SellerSku;
           const asinVal = s.asin ?? s.Asin;
-          const details = s.inventoryDetails ?? s.InventoryDetails ?? (s as Record<string, unknown>).inventoryDetails;
+          const details = getDetails(s as Record<string, unknown>);
           const qty =
             s.fulfillableQuantity ?? s.FulfillableQuantity ??
             extractFulfillable(details) ??
@@ -534,29 +540,57 @@ export async function POST(req: Request) {
 
         let qty: number | undefined = sku ? getFbaBySku(sku)?.qty : undefined;
         if (qty === undefined && asin) qty = getFbaByAsin(asin)?.qty;
-        if (qty === undefined && hasSellerIdForFbm && sku) {
-          // FBM在庫取得（getListingsItem）
+        if (qty === undefined && hasSellerIdForFbm) {
           await sleep(250); // 0.2 req/sec
-          try {
-            const listingRes = await spClient.callAPI({
-              operation: 'getListingsItem',
-              endpoint: 'listingsItems',
-              path: { sellerId: sellerId!, sku },
-              query: {
-                marketplaceIds: JAPAN_MARKETPLACE,
-                includedData: 'fulfillmentAvailability',
-              },
-              options: { version: '2021-08-01' as const },
-            }) as Record<string, unknown>;
+          const parseFbmQty = (res: Record<string, unknown>) => {
             const avail =
-              listingRes?.fulfillmentAvailability ??
-              listingRes?.fulfillment_availability ??
-              (listingRes?.summaries as Array<{ fulfillmentAvailability?: Array<{ quantity?: number }> }>)?.[0]?.fulfillmentAvailability;
+              res?.fulfillmentAvailability ??
+              res?.fulfillment_availability ??
+              (res?.summaries as Array<{ fulfillmentAvailability?: Array<{ quantity?: number }> }>)?.[0]?.fulfillmentAvailability;
             if (Array.isArray(avail) && avail.length > 0) {
-              qty = (avail as Array<{ quantity?: number }>).reduce((sum, a) => sum + (a.quantity ?? 0), 0);
+              return (avail as Array<{ quantity?: number }>).reduce((sum, a) => sum + (a.quantity ?? 0), 0);
             }
-          } catch {
-            // FBM在庫取得失敗（未出品等）はスキップ
+            return undefined;
+          };
+          const parseSearchResults = (res: { summaries?: Array<{ fulfillmentAvailability?: Array<{ quantity?: number }> }> }) => {
+            const summs = res?.summaries;
+            if (!Array.isArray(summs) || summs.length === 0) return undefined;
+            return summs.reduce((s, x) => s + ((x.fulfillmentAvailability ?? []).reduce((a, f) => a + (f.quantity ?? 0), 0)), 0);
+          };
+          if (sku && !sku.startsWith('pr_')) {
+            // FBM: SKUがAmazon形式（pr_以外）なら getListingsItem
+            try {
+              const listingRes = await spClient.callAPI({
+                operation: 'getListingsItem',
+                endpoint: 'listingsItems',
+                path: { sellerId: sellerId!, sku },
+                query: { marketplaceIds: JAPAN_MARKETPLACE, includedData: 'fulfillmentAvailability' },
+                options: { version: '2021-08-01' as const },
+              }) as Record<string, unknown>;
+              qty = parseFbmQty(listingRes);
+            } catch {
+              /* SKU未登録等はスキップ */
+            }
+          }
+          if (qty === undefined && asin) {
+            // FBM: SKUがpr_等で使えない場合、ASINで searchListingsItems
+            try {
+              const searchRes = await spClient.callAPI({
+                operation: 'searchListingsItems',
+                endpoint: 'listingsItems',
+                path: { sellerId: sellerId! },
+                query: {
+                  marketplaceIds: [JAPAN_MARKETPLACE],
+                  identifiers: asin,
+                  identifiersType: 'ASIN',
+                  includedData: 'fulfillmentAvailability',
+                },
+                options: { version: '2021-08-01' as const },
+              }) as { summaries?: Array<{ fulfillmentAvailability?: Array<{ quantity?: number }> }> };
+              qty = parseSearchResults(searchRes);
+            } catch {
+              /* ASIN検索失敗はスキップ */
+            }
           }
         }
         // FBA/FBMでマッチしなかった商品は更新しない（0で上書きして既存在庫を消さない）

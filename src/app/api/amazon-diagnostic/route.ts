@@ -99,7 +99,16 @@ export async function GET() {
       result.fbaInventory = { error: (fb as Error)?.message ?? String(fb) };
     }
 
-    // 3. DB上のAmazon商品（SKU/ASIN照合用サンプル）
+    // 3. FBM在庫用: 商取引アカウントID（AMAZON_SELLER_ID）の確認
+    const sellerId = process.env.AMAZON_SELLER_ID?.trim();
+    result.fbmSetup = {
+      hasSellerId: !!sellerId,
+      note: !sellerId
+        ? 'FBM（自社発送）在庫取得には AMAZON_SELLER_ID が必要です。新規作成ではなく、既存のセラーアカウントに付いているIDです。セラーセントラル → 設定 → 出品用アカウント情報 → 出品者情報 → 出品者トークン（A1で始まる13〜14桁）。Vercelの環境変数に追加して再デプロイしてください。'
+        : undefined,
+    };
+
+    // 4. DB上のAmazon商品（SKU/ASIN照合用サンプル）
     try {
       const { data: dbProducts } = await supabase
         .from('products')
@@ -111,6 +120,11 @@ export async function GET() {
     } catch (db: unknown) {
       result.dbAmazonProducts = { error: (db as Error)?.message ?? String(db) };
     }
+
+    result._help = {
+      sellerId: '商取引アカウントID = 既に持っているAmazon出品者アカウントのID。新規作成不要。セラーセントラルで確認し、Vercel環境変数 AMAZON_SELLER_ID に設定。',
+      fbmAsin: 'FBM商品でSKUがpr_形式の場合、ASINで在庫検索します。AMAZON_SELLER_ID設定が必要。',
+    };
 
     return NextResponse.json(result);
   } catch (e) {
