@@ -11,6 +11,8 @@ import type { SortOption } from '@/components/product-search-bar';
 
 const PER_PAGE = 20;
 
+export const maxDuration = 30;
+
 export default async function ProductsPage({
   searchParams,
 }: {
@@ -32,23 +34,25 @@ export default async function ProductsPage({
 
   const orderConfig = getOrderForSort(sort);
 
-  let productIdsFromLocation: string[] | null = null;
-  if (locationFilter) {
-    if (locationFilter === 'both') {
-      const { data: homeRows } = await supabase.from('product_location_stock').select('product_id').eq('location', 'home').gt('quantity', 0);
-      const { data: whRows } = await supabase.from('product_location_stock').select('product_id').eq('location', 'warehouse').gt('quantity', 0);
-      const homeIds = new Set((homeRows ?? []).map((r) => r.product_id));
-      const whIds = new Set((whRows ?? []).map((r) => r.product_id));
-      productIdsFromLocation = [...homeIds].filter((id) => whIds.has(id));
-    } else {
-      const { data: locRows } = await supabase
-        .from('product_location_stock')
-        .select('product_id')
-        .eq('location', locationFilter)
-        .gt('quantity', 0);
-      productIdsFromLocation = [...new Set((locRows ?? []).map((r) => r.product_id))];
-    }
-  }
+  const [locationResult, setResult, profitResult] = await Promise.all([
+    locationFilter === 'both'
+      ? Promise.all([
+          supabase.from('product_location_stock').select('product_id').eq('location', 'home').gt('quantity', 0),
+          supabase.from('product_location_stock').select('product_id').eq('location', 'warehouse').gt('quantity', 0),
+        ]).then(([a, b]) => {
+          const homeIds = new Set((a.data ?? []).map((r) => r.product_id));
+          return [...homeIds].filter((id) => new Set((b.data ?? []).map((r) => r.product_id)).has(id));
+        })
+      : locationFilter
+        ? supabase.from('product_location_stock').select('product_id').eq('location', locationFilter).gt('quantity', 0).then(({ data }) => [...new Set((data ?? []).map((r) => r.product_id))])
+        : Promise.resolve(null),
+    setOnly ? supabase.from('product_set_items').select('set_product_id').then(({ data }) => [...new Set((data ?? []).map((r) => r.set_product_id))]) : Promise.resolve([]),
+    minProfit > 0 ? supabase.from('sales').select('product_id').eq('user_id', user.id).gte('gross_profit_yen', minProfit).then(({ data }) => [...new Set((data ?? []).map((r) => r.product_id))]) : Promise.resolve([]),
+  ]);
+
+  const productIdsFromLocation = locationResult;
+  const setIds = setOnly ? setResult : null;
+  const profitProductIds = minProfit > 0 ? profitResult : null;
 
   // 在庫条件: 通常は stock > 0。Amazon フィルター時は在庫0も表示（取り込み確認用）
   let query = supabase
@@ -70,11 +74,7 @@ export default async function ProductsPage({
     }
   }
 
-  if (setOnly) {
-    const { data: setRows } = await supabase
-      .from('product_set_items')
-      .select('set_product_id');
-    const setIds = [...new Set((setRows ?? []).map((r) => r.set_product_id))];
+  if (setIds !== null) {
     if (setIds.length > 0) {
       query = query.in('id', setIds);
     } else {
@@ -82,13 +82,7 @@ export default async function ProductsPage({
     }
   }
 
-  if (minProfit > 0) {
-    const { data: sales } = await supabase
-      .from('sales')
-      .select('product_id')
-      .eq('user_id', user.id)
-      .gte('gross_profit_yen', minProfit);
-    const profitProductIds = [...new Set((sales ?? []).map((r) => r.product_id))];
+  if (profitProductIds !== null) {
     if (profitProductIds.length > 0) {
       query = query.in('id', profitProductIds);
     } else {
