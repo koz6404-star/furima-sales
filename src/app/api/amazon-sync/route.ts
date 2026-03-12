@@ -171,12 +171,14 @@ export async function POST(req: Request) {
     }
 
     let fromDate: Date | null = null;
+    let inventoryOnly = false;
     try {
       const body = await req.json().catch(() => ({}));
       if (body?.from && typeof body.from === 'string') {
         const parsed = new Date(body.from);
         if (!isNaN(parsed.getTime())) fromDate = parsed;
       }
+      if (body?.inventoryOnly === true) inventoryOnly = true;
     } catch {
       // body なし or 無効なら fromDate は null
     }
@@ -204,6 +206,11 @@ export async function POST(req: Request) {
       description: string;
     }> = [];
 
+    const synced: string[] = [];
+    const updatedSaleIds = new Set<string>();
+    const insertedOrderProducts = new Set<string>();
+
+    if (!inventoryOnly) {
     for (let c = 0; c < chunks.length; c++) {
       if (c > 0) await sleep(2500); // レート制限対策（0.5 req/sec）
 
@@ -323,11 +330,6 @@ export async function POST(req: Request) {
       }
     }
     const dedupedResults = [...deduped.values()];
-
-    const synced: string[] = [];
-    const updatedSaleIds = new Set<string>();
-    // 今回の同期で INSERT した (orderId|productId) を追跡（同一取引が残った場合の二重 INSERT 防止）
-    const insertedOrderProducts = new Set<string>();
 
     const tryUpdateSale = async (
       candidates: Array<{ id: string; product_id: string; quantity: number }>,
@@ -551,6 +553,7 @@ export async function POST(req: Request) {
         synced.push(saleKey);
         if (r.orderId) insertedOrderProducts.add(`${r.orderId}|${productId}`);
       }
+    }
     }
 
     // --- 在庫同期: FBA + FBM を SKU ベースで反映 ---

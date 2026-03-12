@@ -40,14 +40,17 @@ export function AmazonSyncButton() {
   const [resetPreview, setResetPreview] = useState<ResetResult | null>(null);
   const router = useRouter();
 
-  async function handleSync(from?: string) {
+  async function handleSync(from?: string, inventoryOnly?: boolean) {
     setLoading(true);
     setMessage(null);
     try {
+      const body: Record<string, unknown> = {};
+      if (from) body.from = from;
+      if (inventoryOnly) body.inventoryOnly = true;
       const res = await fetch('/api/amazon-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: from ? JSON.stringify({ from }) : '{}',
+        body: Object.keys(body).length > 0 ? JSON.stringify(body) : '{}',
       });
       const text = await res.text();
       let data: Record<string, unknown>;
@@ -62,8 +65,10 @@ export function AmazonSyncButton() {
       const fbaAsins = Number(data.fbaByAsinCount ?? 0);
       const invErr = data.inventoryError;
       const debug = data.debug as string | undefined;
-      let msg = `取得: ${data.transactionsFound ?? 0}件、登録: ${data.synced ?? 0}件`;
-      if (inv > 0) msg += `、在庫更新: ${inv}件`;
+      let msg = inventoryOnly
+        ? `在庫更新: ${inv}件`
+        : `取得: ${data.transactionsFound ?? 0}件、登録: ${data.synced ?? 0}件`;
+      if (!inventoryOnly && inv > 0) msg += `、在庫更新: ${inv}件`;
       if (fbaSkus > 0 || fbaAsins > 0) msg += `（FBA: SKU ${fbaSkus}件、ASIN ${fbaAsins}件）`;
       if (invErr) msg += ` ※${invErr}`;
       if (debug) msg += ` ${debug}`;
@@ -190,6 +195,15 @@ export function AmazonSyncButton() {
         title="2025年2月から初回取込（1回のみ実行）"
       >
         初回取込（2月～）
+      </button>
+      <button
+        type="button"
+        onClick={() => handleSync(undefined, true)}
+        disabled={loading}
+        className="rounded border border-emerald-500 px-4 py-2 text-emerald-600 font-medium hover:bg-emerald-50 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+        title="販売履歴は取得せず、FBA/FBM在庫のみ更新。時短・タイムアウト対策"
+      >
+        在庫のみ更新
       </button>
       <button
         type="button"
