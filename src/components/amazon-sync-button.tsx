@@ -40,13 +40,15 @@ export function AmazonSyncButton() {
   const [resetPreview, setResetPreview] = useState<ResetResult | null>(null);
   const router = useRouter();
 
-  async function handleSync(from?: string, inventoryOnly?: boolean) {
+  async function handleSync(from?: string, inventoryOnly?: boolean, salesOnly?: boolean, to?: string) {
     setLoading(true);
     setMessage(null);
     try {
       const body: Record<string, unknown> = {};
       if (from) body.from = from;
+      if (to) body.to = to;
       if (inventoryOnly) body.inventoryOnly = true;
+      if (salesOnly) body.salesOnly = true;
       const res = await fetch('/api/amazon-sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -67,7 +69,9 @@ export function AmazonSyncButton() {
       const debug = data.debug as string | undefined;
       let msg = inventoryOnly
         ? `在庫更新: ${inv}件`
-        : `取得: ${data.transactionsFound ?? 0}件、登録: ${data.synced ?? 0}件`;
+        : salesOnly
+          ? `販売履歴: 取得${data.transactionsFound ?? 0}件、登録${data.synced ?? 0}件`
+          : `取得: ${data.transactionsFound ?? 0}件、登録: ${data.synced ?? 0}件`;
       if (!inventoryOnly && inv > 0) msg += `、在庫更新: ${inv}件`;
       if (fbaSkus > 0 || fbaAsins > 0) msg += `（FBA: SKU ${fbaSkus}件、ASIN ${fbaAsins}件）`;
       if (invErr) msg += ` ※${invErr}`;
@@ -178,7 +182,7 @@ export function AmazonSyncButton() {
   }
 
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 flex-wrap">
       <button
         type="button"
         onClick={() => handleSync()}
@@ -205,6 +209,40 @@ export function AmazonSyncButton() {
       >
         在庫のみ更新
       </button>
+      <button
+        type="button"
+        onClick={() => handleSync('2025-02-01', false, true)}
+        disabled={loading}
+        className="rounded border border-sky-500 px-4 py-2 text-sky-600 font-medium hover:bg-sky-50 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+        title="販売履歴のみ取込（FBA/FBM両方）。在庫は更新しない。2月～今日まで"
+      >
+        販売履歴のみ取込（2月～）
+      </button>
+      <span className="text-slate-500 text-xs self-center">月別:</span>
+      {[
+        ['2月', '2025-02-01', '2025-02-28'],
+        ['3月', '2025-03-01', '2025-03-31'],
+        ['4月', '2025-04-01', '2025-04-30'],
+        ['5月', '2025-05-01', '2025-05-31'],
+        ['6月', '2025-06-01', '2025-06-30'],
+        ['7月', '2025-07-01', '2025-07-31'],
+        ['8月', '2025-08-01', '2025-08-31'],
+        ['9月', '2025-09-01', '2025-09-30'],
+        ['10月', '2025-10-01', '2025-10-31'],
+        ['11月', '2025-11-01', '2025-11-30'],
+        ['12月', '2025-12-01', '2025-12-31'],
+      ].map(([label, from, to]) => (
+        <button
+          key={from}
+          type="button"
+          onClick={() => handleSync(from, false, true, to)}
+          disabled={loading}
+          className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+          title={`${label}の販売履歴のみ取込（FBA/FBM両方）`}
+        >
+          {label}
+        </button>
+      ))}
       <button
         type="button"
         onClick={() => handleSync('2025-09-01')}

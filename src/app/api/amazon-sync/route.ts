@@ -1,6 +1,6 @@
 /**
  * Amazon SP-API 同期
- * - Finances API: 売上・手数料を取得し products/sales に反映
+ * - Finances API: 売上・手数料を取得し products/sales に反映（FBA/FBM両方のShipment取引を処理）
  * - FBA Inventory API: FBA在庫をSKUベースで取得
  * - Listings API: FBM在庫を fulfillmentAvailability で取得
  */
@@ -25,15 +25,16 @@ function toISO(d: Date): string {
   return d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
-/** 開始日から今日までを MAX_DAYS_PER_REQUEST 日ずつのチャンクに分割 */
-function buildChunks(fromDate: Date): Array<{ postedAfter: Date; postedBefore: Date }> {
+/** 開始日から終了日（または今日）までを MAX_DAYS_PER_REQUEST 日ずつのチャンクに分割 */
+function buildChunks(fromDate: Date, toDate?: Date | null): Array<{ postedAfter: Date; postedBefore: Date }> {
   const chunks: Array<{ postedAfter: Date; postedBefore: Date }> = [];
   const now = new Date(Date.now() - API_TIME_OFFSET_MS);
+  const limit = toDate && toDate < now ? toDate : now;
   let cur = new Date(fromDate);
-  while (cur < now) {
+  while (cur < limit) {
     const end = new Date(cur);
     end.setDate(end.getDate() + MAX_DAYS_PER_REQUEST);
-    const postedBefore = end > now ? new Date(now) : end;
+    const postedBefore = end > limit ? new Date(limit) : end;
     chunks.push({ postedAfter: new Date(cur), postedBefore });
     cur = postedBefore;
   }
@@ -171,14 +172,21 @@ export async function POST(req: Request) {
     }
 
     let fromDate: Date | null = null;
+    let toDate: Date | null = null;
     let inventoryOnly = false;
+    let salesOnly = false;
     try {
       const body = await req.json().catch(() => ({}));
       if (body?.from && typeof body.from === 'string') {
         const parsed = new Date(body.from);
         if (!isNaN(parsed.getTime())) fromDate = parsed;
       }
+      if (body?.to && typeof body.to === 'string') {
+        const parsed = new Date(body.to);
+        if (!isNaN(parsed.getTime())) toDate = parsed;
+      }
       if (body?.inventoryOnly === true) inventoryOnly = true;
+      if (body?.salesOnly === true) salesOnly = true;
     } catch {
       // body なし or 無効なら fromDate は null
     }
@@ -188,7 +196,7 @@ export async function POST(req: Request) {
     const apiNow = new Date(Date.now() - API_TIME_OFFSET_MS);
     const chunks =
       fromDate != null
-        ? buildChunks(fromDate)
+        ? buildChunks(fromDate, toDate)
         : [{ postedAfter: new Date(apiNow.getTime() - SYNC_DAYS * 864e5), postedBefore: apiNow }];
 
     const results: Array<{
@@ -556,9 +564,7 @@ export async function POST(req: Request) {
     }
     }
 
-    // --- 在庫同期: FBA + FBM を SKU ベースで反映 ---
-    // FBM取得に必要な sellerId は環境変数 AMAZON_SELLER_ID で指定（Seller Central の商取引アカウント ID）
-    const sellerId = process.env.AMAZON_SELLER_ID?.trim();
+    // --- 在庫同期: FBA + FBM を SKU ベースで反映 ---（salesOnly のときはスキップ）
     let inventoryUpdated = 0;
     let fbaSkusFound = 0;
     let fbaByAsinCount = 0;
@@ -566,6 +572,8 @@ export async function POST(req: Request) {
     let fbaInboundTotal = 0;
     let fbaReservedTotal = 0;
     let fbaUnfulfillableTotal = 0;
+    if (!salesOnly) {
+    const sellerId = process.env.AMAZON_SELLER_ID?.trim();
     try {
       // sellerId が無くても FBA 在庫は取得可能（getInventorySummaries は sellerId 不要）
       const hasSellerIdForFbm = !!sellerId;
@@ -869,6 +877,15 @@ export async function POST(req: Request) {
       fbaReservedTotal,
       fbaUnfulfillableTotal,
       ...(debug && { debug }),
+    });
+    }
+
+    // salesOnly 時: 在庫同期をスキップして即返却
+    return NextResponse.json({
+      ok: true,
+      transactionsFound: results.length,
+      synced: synced.length,
+      inventoryUpdated: 0,
     });
   } catch (e) {
     const err = e as Error & { response?: { body?: string } };
