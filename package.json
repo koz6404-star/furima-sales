@@ -1,51 +1,54 @@
-{
-  "name": "furima-sales",
-  "version": "0.1.0",
-  "private": true,
-  "engines": {
-    "node": ">=20"
-  },
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "test": "vitest run",
-    "test:e2e": "playwright test",
-    "excel-template": "node scripts/generate-excel-template.mjs",
-    "remove-checkerboard": "node scripts/remove-checkerboard.mjs",
-    "supabase-setup": "node scripts/supabase-setup.mjs",
-    "supabase-migrate": "node scripts/supabase-migrate.mjs"
-  },
-  "dependencies": {
-    "@supabase/ssr": "^0.8.0",
-    "@supabase/supabase-js": "^2.98.0",
-    "amazon-sp-api": "^1.2.0",
-    "exceljs": "^4.4.0",
-    "jszip": "^3.10.1",
-    "next": "16.1.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
-    "recharts": "^3.7.0",
-    "uuid": "^13.0.0",
-    "xlsx": "^0.18.5"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.58.2",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "@types/uuid": "^10.0.0",
-    "@vitejs/plugin-react": "^5.1.4",
-    "dotenv": "^17.3.1",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "pg": "^8.19.0",
-    "sharp": "^0.34.5",
-    "supabase": "^2.76.15",
-    "tailwindcss": "^4",
-    "typescript": "^5",
-    "vitest": "^4.0.18"
-  }
+﻿{
+    "name":  "furima-sales",
+    "version":  "0.1.0",
+    "private":  true,
+    "engines":  {
+                    "node":  "\u003e=20"
+                },
+    "scripts":  {
+                    "dev":  "next dev",
+                    "build":  "next build",
+                    "start":  "next start",
+                    "lint":  "eslint",
+                    "test":  "vitest run",
+                    "test:e2e":  "playwright test",
+                    "excel-template":  "node scripts/generate-excel-template.mjs",
+                    "remove-checkerboard":  "node scripts/remove-checkerboard.mjs",
+                    "supabase-setup":  "node scripts/supabase-setup.mjs",
+                    "supabase-migrate":  "node scripts/supabase-migrate.mjs",
+                    "amazon-sales-zero-diagnostic":  "node scripts/amazon-sales-zero-diagnostic.mjs",
+                    "amazon-sales-state-validate":  "node scripts/amazon-sales-state-validate.mjs",
+                    "amazon-phase111213-verify":  "node scripts/amazon-phase111213-verify.mjs"
+                },
+    "dependencies":  {
+                         "@supabase/ssr":  "^0.8.0",
+                         "@supabase/supabase-js":  "^2.98.0",
+                         "amazon-sp-api":  "^1.2.0",
+                         "exceljs":  "^4.4.0",
+                         "jszip":  "^3.10.1",
+                         "next":  "16.1.6",
+                         "react":  "19.2.3",
+                         "react-dom":  "19.2.3",
+                         "recharts":  "^3.7.0",
+                         "uuid":  "^13.0.0",
+                         "xlsx":  "^0.18.5"
+                     },
+    "devDependencies":  {
+                            "@playwright/test":  "^1.58.2",
+                            "@tailwindcss/postcss":  "^4",
+                            "@types/node":  "^20",
+                            "@types/react":  "^19",
+                            "@types/react-dom":  "^19",
+                            "@types/uuid":  "^10.0.0",
+                            "@vitejs/plugin-react":  "^5.1.4",
+                            "dotenv":  "^17.3.1",
+                            "eslint":  "^9",
+                            "eslint-config-next":  "16.1.6",
+                            "pg":  "^8.19.0",
+                            "sharp":  "^0.34.5",
+                            "supabase":  "^2.76.15",
+                            "tailwindcss":  "^4",
+                            "typescript":  "^5",
+                            "vitest":  "^4.0.18"
+                        }
 }
