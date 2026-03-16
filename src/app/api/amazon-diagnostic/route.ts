@@ -1,10 +1,13 @@
 /**
  * Amazon API 診断用（原因調査）
  * 実際のレスポンス構造を返して確認する
+ *
+ * Phase 1: Orders API 疎通確認を追加
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createSpApiClient, JAPAN_MARKETPLACE } from '@/lib/amazon-sp-api';
+import { getOrders } from '@/lib/amazon/orders';
 
 const API_TIME_OFFSET_MS = 10 * 60 * 1000;
 
@@ -25,6 +28,28 @@ export async function GET() {
     const postedAfter = new Date(apiNow.getTime() - 7 * 864e5); // 直近7日
 
     const result: Record<string, unknown> = {};
+
+    // 0. Orders API 疎通確認（Phase 1）
+    try {
+      const ordersRes = await getOrders({
+        createdAfter: new Date(Date.now() - 7 * 864e5),
+        maxResultsPerPage: 5,
+      });
+      const orders = ordersRes.Orders ?? [];
+      result.ordersApi = {
+        ok: true,
+        ordersCount: orders.length,
+        sampleOrder: orders[0] ? {
+          AmazonOrderId: orders[0].AmazonOrderId,
+          PurchaseDate: orders[0].PurchaseDate,
+          OrderStatus: orders[0].OrderStatus,
+          FulfillmentChannel: orders[0].FulfillmentChannel,
+        } : null,
+        note: orders.length === 0 ? '直近7日に注文なし。接続は成功。' : undefined,
+      };
+    } catch (ord: unknown) {
+      result.ordersApi = { ok: false, error: (ord as Error)?.message ?? String(ord) };
+    }
 
     // 1. Finances API: 1件のトランザクション構造を取得
     try {

@@ -22,7 +22,8 @@ export function Nav() {
   const pathname = usePathname();
   const { user, signOut } = useAuth();
 
-  const isActive = (href: string) => href.startsWith('/dashboard') ? pathname.startsWith('/dashboard') : pathname === href;
+  const isActive = (href: string) =>
+    href.startsWith('/dashboard') ? pathname.startsWith('/dashboard') : pathname === href;
 
   return (
     <nav className="border-b border-slate-200 bg-white">
