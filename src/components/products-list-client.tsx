@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/client';
 import { getOrderForSort } from '@/lib/product-sort';
 import { ProductSearchBar } from '@/components/product-search-bar';
 import { ProductsTableWithActions } from '@/components/products-table-with-actions';
-import { AmazonSyncButton } from '@/components/amazon-sync-button';
 import type { SortOption } from '@/components/product-search-bar';
 
 const PER_PAGE = 20;
@@ -165,7 +164,6 @@ export function ProductsListClient() {
           <div className="w-full min-w-0 sm:flex-1 sm:min-w-[200px]">
             <ProductSearchBar basePath="/products" />
           </div>
-          <AmazonSyncButton />
           <Link href="/products/new" className="rounded bg-emerald-600 px-4 py-2 text-white font-medium hover:bg-emerald-700 whitespace-nowrap">
             新規登録
           </Link>
