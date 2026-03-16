@@ -7,7 +7,7 @@
 
 ## 1. どこまで完了しているか
 
-### Amazon 売上管理（基盤実装 Phase0〜14 完了）
+### Amazon 売上管理（FBA のみ完成。FBM は未着手）
 
 | 区分 | 内容 | 到達点 |
 |------|------|--------|
@@ -55,10 +55,11 @@
 
 ## 3. 次にやること（優先順）
 
-1. **Amazon 新 UI 作成**（mart 読み取り専用）— `TODO #3`
-2. **Amazon＋フリマ合算表示** — `TODO #2`
-3. **amazon-full-sync 定期自動実行**（Vercel Cron）— `TODO #7`
-4. **粗利計算（原価反映）** — `TODO #5`
+1. **Phase14: FBM 在庫取得** — Listings API / inventory availability で FBM 在庫 current 化
+2. **Phase15: FBM 売上結合** — Orders の FBA/FBM 区分整理・在庫減算
+3. **Phase16: Amazon 取り込み完成整理** — FBA/FBM 両対応・実運用検証
+4. **Amazon 商品への原価入力 UI** — SKU ごとに仕入れ原価を手動登録（SP-API に原価情報なし）
+5. **Amazon 新 UI 作成** — Phase14〜16 完了後に mart 読み取り専用画面を作成
 
 ---
 
