@@ -29,7 +29,7 @@
 | **再設計 Phase6** | 検証API・開発導線の運用画面からの分離 | 完了。verify リンク削除、タイトル整理済み |
 | **再設計 Phase7** | mart テーブル導入（amazon_sales_summary_*） | 完了・検証済み |
 | **再設計 Phase8** | Amazon UI の一時非表示（nav 削除・redirect） | 完了。新 UI 作成まで非表示 |
-| **Phase14** | FBM 在庫取得（Listings Items API → amazon_fbm_inventory_current） | 実装完了。検証待ち |
+| **Phase14** | FBM 在庫取得（Listings Items API → amazon_fbm_inventory_current） | 完了・検証済み（SKU5件取得確認）|
 
 ### フリマ側（基盤改善）
 

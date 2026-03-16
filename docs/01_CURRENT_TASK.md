@@ -13,7 +13,7 @@ Phase14: FBM 在庫取得（Listings Items API）
 2026-03-16
 
 ### 状態
-実装完了 → 検証待ち
+完了・検証済み（2026-03-16）
 
 ### 目的
 FBM（自己発送）商品の出品在庫数を Amazon Listings Items API から取得し、`amazon_fbm_inventory_current` テーブルに保存する。
