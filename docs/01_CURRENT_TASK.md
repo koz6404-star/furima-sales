@@ -7,30 +7,33 @@
 ## 現在の作業指示
 
 ### タイトル
-Phase15: FBM 売上結合・統合在庫
+Phase16: Amazon 取り込み完成（新 UI・nav 復活）
 
 ### 更新日
 2026-03-16
 
 ### 状態
-実装済み（検証待ち）
+実装済み（デプロイ検証待ち）
 
 ### 目的
-FBA + FBM の在庫データを統合し、SKU 売上サマリーに fulfillment_type（FBA/FBM/MIXED）と現在庫数を付与する。
+FBA + FBM 統合の新しい Amazon 売上管理画面を作成し、ナビゲーションに復活させる。
 
 ### 実行結果
-- `supabase/migrations/030_phase15_inventory_unified.sql` 作成（fulfillment_type/current_inventory 列追加 + 統合在庫 VIEW）
-- `src/lib/amazon/build-sales-mart.ts` 更新（FBA+FBM 在庫取得、fulfillment_type 判定、current_inventory 付与）
-- `src/app/api/amazon-inventory-unified/route.ts` 作成（統合在庫 + 売上結合 API）
+- `src/app/amazon-dashboard/page.tsx` 作成（サーバーコンポーネント、認証チェック）
+- `src/components/amazon-dashboard-client.tsx` 作成（SKU別売上・統合在庫・月別集計の3タブ UI）
+- `src/components/nav.tsx` に「Amazon売上」メニュー追加
+- 型エラー修正（finances.ts, transform-fee-events.ts, amazon-sales-lines/route.ts, verify ページ）
+- `tsconfig.json` に legacy 除外追加
+- ビルド成功確認
 
 ### 検証手順
-1. Supabase SQL Editor で migration 030 を実行: https://supabase.com/dashboard/project/ewxzsftkxkqrvhjavrfd/sql/new
-2. `npm run amazon-build-sales-mart -- --user-id=b654d797-cae4-4af8-b22c-ffa91763698c` を実行
-3. amazon_sales_summary_sku テーブルで fulfillment_type / current_inventory が入っていることを確認: https://supabase.com/dashboard/project/ewxzsftkxkqrvhjavrfd/editor
-4. 統合在庫 API を確認: `/api/amazon-inventory-unified`
+1. Vercel に自動デプロイされるのを待つ
+2. `/amazon-dashboard` にアクセスし、3タブ（SKU別売上・統合在庫・月別集計）が表示されることを確認
+3. nav に「Amazon売上」メニューが表示されることを確認
 
 ### 次アクション
-Phase15 検証完了後 → Phase16（Amazon 取り込み完成整理）へ
+- Amazon 商品原価入力 UI（SKU ごとに仕入れ原価を手動登録）
+- Amazon＋フリマ合算表示
 
 ---
 

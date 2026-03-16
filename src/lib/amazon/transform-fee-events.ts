@@ -102,10 +102,10 @@ function collectFees(
     // Phase12/Phase14: AdjustmentAmount を採用。符号は payload のまま。startsWith で実データに合わせる
     const adjType = (ev.AdjustmentType ?? ev.adjustmentType ?? 'Adjustment') as string;
     if (!isAdjustmentTypeFeeLike(adjType)) return lines;
-    const amt = ev.AdjustmentAmount ?? ev.adjustmentAmount;
+    const amt = (ev.AdjustmentAmount ?? ev.adjustmentAmount) as Record<string, unknown> | undefined;
     if (!amt) return lines;
-    const cc = amt.CurrencyCode ?? (amt as Record<string, unknown>)?.currencyCode;
-    const val = amt.CurrencyAmount ?? (amt as Record<string, unknown>)?.amount ?? (amt as Record<string, unknown>)?.currencyAmount;
+    const cc = amt.CurrencyCode ?? amt.currencyCode;
+    const val = amt.CurrencyAmount ?? amt.amount ?? amt.currencyAmount;
     const yen = parseAmountYen(cc, val);
     if (yen === 0) return lines;
     lines.push({

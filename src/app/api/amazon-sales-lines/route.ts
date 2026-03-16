@@ -86,7 +86,7 @@ export async function GET(req: Request) {
         .eq('user_id', user.id)
         .in('order_id', orderIds);
       for (const r of feeRows ?? []) {
-        const oid = (r.order_id ?? '').trim();
+        const oid = String(r.order_id ?? '').trim();
         if (oid) {
           feeMap[oid] = (feeMap[oid] ?? 0) + (Number(r.fee_amount_yen) || 0);
         }
@@ -101,7 +101,7 @@ export async function GET(req: Request) {
         const s = (r.sku as string).trim();
         row.current_available = s in currentMap ? currentMap[s]! : null;
       }
-      const oid = (r.order_id ?? '').trim();
+      const oid = String(r.order_id ?? '').trim();
       row.fee_amount_aggregated = oid && oid in feeMap ? feeMap[oid]! : null;
       return row;
     });

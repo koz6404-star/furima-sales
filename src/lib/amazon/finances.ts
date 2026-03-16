@@ -28,7 +28,6 @@ export interface FinancialEventsPayload {
     AdjustmentEventList?: Array<Record<string, unknown>>;
     [key: string]: unknown;
   };
-  NextToken?: string;
 }
 
 export interface ListFinancialEventsResult {

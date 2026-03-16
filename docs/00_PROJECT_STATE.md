@@ -1,13 +1,13 @@
 # プロジェクト状態（正本）
 
-**更新日**: 2026-03-16（Phase15 実装）
+**更新日**: 2026-03-16（Phase16 実装）
 **参照**: `01_CURRENT_TASK.md`（作業指示）, `02_CHANGELOG.md`（変更履歴）, `03_ISSUES.md`（未解決論点）
 
 ---
 
 ## 1. どこまで完了しているか
 
-### Amazon 売上管理（FBA 完成。FBM Phase15 まで完了）
+### Amazon 売上管理（FBA + FBM 統合完了）
 
 | 区分 | 内容 | 到達点 |
 |------|------|--------|
@@ -28,9 +28,10 @@
 | **再設計 Phase5** | 取得→整形の連鎖スクリプト（`amazon-full-sync`） | 完了。`再設計Phase5_連鎖スクリプト.md` 参照 |
 | **再設計 Phase6** | 検証API・開発導線の運用画面からの分離 | 完了。verify リンク削除、タイトル整理済み |
 | **再設計 Phase7** | mart テーブル導入（amazon_sales_summary_*） | 完了・検証済み |
-| **再設計 Phase8** | Amazon UI の一時非表示（nav 削除・redirect） | 完了。新 UI 作成まで非表示 |
+| **再設計 Phase8** | Amazon UI の一時非表示（nav 削除・redirect） | 完了 → Phase16 で新 UI に置換 |
 | **Phase14** | FBM 在庫取得（Listings Items API → amazon_fbm_inventory_current） | 完了・検証済み（SKU5件取得確認）|
-| **Phase15** | FBM 売上結合・統合在庫（inventory_unified VIEW + SKU mart に fulfillment_type/在庫数付与） | 実装済み |
+| **Phase15** | FBM 売上結合・統合在庫（inventory_unified VIEW + SKU mart に fulfillment_type/在庫数付与） | 完了・検証済み |
+| **Phase16** | Amazon 取り込み完成（新 UI 作成・nav 復活・型エラー修正・ビルド確認） | 実装済み |
 
 ### フリマ側（基盤改善）
 
@@ -46,7 +47,7 @@
 - **取得**: `npm run amazon-full-sync`（または個別 `amazon-*-raw-sync`）で SP-API → `amazon_*_raw`
 - **整形**: raw → `amazon_sales_lines` / `amazon_fee_events` / `amazon_inventory_current`
 - **集計**: mart テーブル（`amazon_sales_summary_daily/monthly/sku/asin`）を事前集計。API は mart 優先
-- **表示**: Amazon UI は現在非表示。新 UI 作成待ち
+- **表示**: `/amazon-dashboard`（SKU別売上・在庫・月別集計。mart 読み取り専用）
 
 ### フリマ（メルカリ・ラクマ）
 - **売上入力**: 手動入力（売却価格・プラットフォーム・送料）
@@ -57,8 +58,7 @@
 
 ## 3. 次にやること（優先順）
 
-1. **Phase15 検証** — migration 030 適用 → `npm run amazon-build-sales-mart` で mart 再構築 → 統合在庫 API 確認
-2. **Phase16: Amazon 取り込み完成整理** — FBA/FBM 両対応・実運用検証
+1. **Phase16 検証** — Vercel デプロイ後に `/amazon-dashboard` で動作確認
 4. **Amazon 商品への原価入力 UI** — SKU ごとに仕入れ原価を手動登録（SP-API に原価情報なし）
 5. **Amazon 新 UI 作成** — Phase14〜16 完了後に mart 読み取り専用画面を作成
 

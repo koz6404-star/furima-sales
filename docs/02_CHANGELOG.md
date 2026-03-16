@@ -6,6 +6,13 @@
 
 ## 2026年3月
 
+### Phase16: Amazon 取り込み完成・新 UI（2026-03-16）
+- `src/app/amazon-dashboard/page.tsx` 追加（Amazon 売上管理画面）
+- `src/components/amazon-dashboard-client.tsx` 追加（SKU別売上・統合在庫・月別集計の3タブ）
+- `src/components/nav.tsx` に「Amazon売上」メニュー復活
+- 型エラー修正: finances.ts, transform-fee-events.ts, amazon-sales-lines/route.ts
+- 旧 verify ページを redirect 化、tsconfig に legacy 除外追加
+
 ### Phase15: FBM 売上結合・統合在庫（2026-03-16）
 - `supabase/migrations/030_phase15_inventory_unified.sql` 追加（SKU mart に fulfillment_type/current_inventory 列追加 + 統合在庫 VIEW）
 - `src/lib/amazon/build-sales-mart.ts` 更新（FBA+FBM 在庫取得→SKU別にfulfillment_type判定・在庫数付与）

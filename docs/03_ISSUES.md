@@ -22,7 +22,7 @@
 |------|--------|------|------|
 | Phase14: FBM 在庫取得 | - | 完了 | 検証済み。SKU5件取得確認 |
 | Phase15: FBM 売上結合 | - | 実装済み | 統合在庫 VIEW + SKU mart に fulfillment_type/在庫数付与。検証待ち |
-| Phase16: Amazon 取り込み完成 | 高 | 未着手 | FBA/FBM 両対応・売上/手数料/在庫の基本統合・実運用検証 |
+| Phase16: Amazon 取り込み完成 | - | 実装済み | 新 UI 作成・nav 復活・ビルド確認済み。デプロイ検証待ち |
 | Amazon 商品原価入力 UI | 高 | 未着手 | SP-API に原価なし。SKU ごとに手動入力できる画面が必要 |
 
 ## 将来拡張候補
@@ -39,9 +39,9 @@
 | 論点 | 優先度 | 状態 | 備考 |
 |------|--------|------|------|
 | 検証 API の運用画面からの分離 | - | 完了 | Phase6 で `/amazon-sales` / `/amazon-finance` から verify リンクを削除済み |
-| Amazon UI 非表示 | - | 完了 | Phase8 で nav 削除・redirect 化。新 UI 作成まで非表示 |
+| Amazon UI 非表示 | - | 完了 | Phase8 で非表示化 → Phase16 で `/amazon-dashboard` に置換 |
 | 同期・整形ボタンの段階的削除 | 低 | 将来 | バッチ化後に「最終更新日時」表示へ移行 |
-| Amazon 新 UI 作成 | 高 | 未着手 | mart 読み取り専用の新画面。TODO #3 |
+| Amazon 新 UI 作成 | - | 完了 | Phase16 で `/amazon-dashboard` 作成済み |
 | amazon-full-sync 定期実行 | 中 | 未着手 | Vercel Cron Jobs または GitHub Actions。TODO #7 |
 | Amazon＋フリマ合算表示 | 高 | 未着手 | 全チャネル合計の利益を一画面で。TODO #2 |
 

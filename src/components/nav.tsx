@@ -13,6 +13,7 @@ const navItems = [
   { href: '/products/new', label: '商品登録' },
   { href: '/import', label: 'Excel取込' },
   { href: `/dashboard?period=month&year=${new Date().getFullYear()}&month=${new Date().getMonth() + 1}`, label: 'ダッシュボード' },
+  { href: '/amazon-dashboard', label: 'Amazon売上' },
   { href: '/export', label: '出力エクスポート' },
   { href: '/settings', label: '設定' },
 ];
