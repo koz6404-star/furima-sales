@@ -26,6 +26,7 @@
         "amazon-fba-inventory-raw-sync": "tsx scripts/amazon-fba-inventory-raw-sync.ts",
         "amazon-inventory-current-transform": "tsx scripts/amazon-inventory-current-transform.ts",
         "amazon-build-sales-mart": "tsx scripts/amazon-build-sales-mart.ts",
+        "amazon-fbm-inventory-sync": "tsx scripts/amazon-fbm-inventory-sync.ts",
         "amazon-full-sync": "tsx scripts/amazon-full-sync.ts"
     },
     "dependencies": {

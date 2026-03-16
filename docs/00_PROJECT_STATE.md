@@ -1,6 +1,6 @@
 # プロジェクト状態（正本）
 
-**更新日**: 2026-03-16
+**更新日**: 2026-03-16（Phase14 実装）
 **参照**: `01_CURRENT_TASK.md`（作業指示）, `02_CHANGELOG.md`（変更履歴）, `03_ISSUES.md`（未解決論点）
 
 ---
@@ -29,6 +29,7 @@
 | **再設計 Phase6** | 検証API・開発導線の運用画面からの分離 | 完了。verify リンク削除、タイトル整理済み |
 | **再設計 Phase7** | mart テーブル導入（amazon_sales_summary_*） | 完了・検証済み |
 | **再設計 Phase8** | Amazon UI の一時非表示（nav 削除・redirect） | 完了。新 UI 作成まで非表示 |
+| **Phase14** | FBM 在庫取得（Listings Items API → amazon_fbm_inventory_current） | 実装完了。検証待ち |
 
 ### フリマ側（基盤改善）
 
@@ -55,7 +56,8 @@
 
 ## 3. 次にやること（優先順）
 
-1. **Phase14: FBM 在庫取得** — Listings API / inventory availability で FBM 在庫 current 化
+1. **Phase14 検証** — `AMAZON_SELLER_ID` を `.env.local` に設定し `npm run amazon-fbm-inventory-sync` で動作確認
+2. **Phase15: FBM 売上結合** — Orders の FBA/FBM 区分整理・在庫減算（Phase14 検証後）
 2. **Phase15: FBM 売上結合** — Orders の FBA/FBM 区分整理・在庫減算
 3. **Phase16: Amazon 取り込み完成整理** — FBA/FBM 両対応・実運用検証
 4. **Amazon 商品への原価入力 UI** — SKU ごとに仕入れ原価を手動登録（SP-API に原価情報なし）

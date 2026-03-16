@@ -41,6 +41,7 @@ import { runFinanceRawSync } from '../src/lib/amazon/run-finance-raw-sync';
 import { runFeeEventsTransform } from '../src/lib/amazon/run-fee-events-transform';
 import { runFbaInventoryRawSync } from '../src/lib/amazon/run-fba-inventory-raw-sync';
 import { runInventoryCurrentTransform } from '../src/lib/amazon/run-inventory-current-transform';
+import { runFbmInventorySync } from '../src/lib/amazon/run-fbm-inventory-sync';
 import { runBuildSalesMart } from '../src/lib/amazon/run-build-sales-mart';
 
 interface ParsedArgs {
@@ -50,6 +51,7 @@ interface ParsedArgs {
   skipOrders: boolean;
   skipFinance: boolean;
   skipInventory: boolean;
+  skipFbm: boolean;
 }
 
 function parseArgs(): ParsedArgs {
@@ -59,6 +61,7 @@ function parseArgs(): ParsedArgs {
   let skipOrders = false;
   let skipFinance = false;
   let skipInventory = false;
+  let skipFbm = false;
 
   for (const arg of process.argv.slice(2)) {
     if (arg.startsWith('--user-id=')) {
@@ -73,6 +76,8 @@ function parseArgs(): ParsedArgs {
       skipFinance = true;
     } else if (arg === '--skip-inventory') {
       skipInventory = true;
+    } else if (arg === '--skip-fbm') {
+      skipFbm = true;
     } else if (!arg.startsWith('-')) {
       userId ??= arg.trim();
     }
@@ -82,7 +87,7 @@ function parseArgs(): ParsedArgs {
     userId = process.env.AMAZON_USER_ID?.trim() ?? null;
   }
 
-  return { userId, from, to, skipOrders, skipFinance, skipInventory };
+  return { userId, from, to, skipOrders, skipFinance, skipInventory, skipFbm };
 }
 
 function step(label: string) {
@@ -100,7 +105,7 @@ function skip(label: string) {
 }
 
 async function main() {
-  const { userId, from, to, skipOrders, skipFinance, skipInventory } = parseArgs();
+  const { userId, from, to, skipOrders, skipFinance, skipInventory, skipFbm } = parseArgs();
 
   if (!userId) {
     console.error(`
@@ -117,6 +122,7 @@ async function main() {
   --skip-orders       Orders 取得をスキップ
   --skip-finance      Finance 取得をスキップ
   --skip-inventory    FBA Inventory 取得をスキップ
+  --skip-fbm          FBM 在庫取得をスキップ
 `);
     process.exit(1);
   }
@@ -208,7 +214,7 @@ async function main() {
   }
 
   // ── 6. inventory_current 整形 ────────────────────────
-  step('6/7 inventory_current 整形');
+  step('6/8 inventory_current 整形（FBA）');
   try {
     const r = await runInventoryCurrentTransform(userId);
     if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[inventory-current] ${e}`));
@@ -219,12 +225,33 @@ async function main() {
     console.error(`✗ inventory_current 整形 error: ${msg}`);
   }
 
-  // ── 7. mart テーブル構築 ─────────────────────────────
-  step('7/7 売上集計 mart 構築');
+  // ── 7. FBM 在庫取得 ──────────────────────────────────
+  if (skipFbm || !process.env.AMAZON_SELLER_ID) {
+    if (!process.env.AMAZON_SELLER_ID) {
+      skip('7/8 FBM 在庫取得（AMAZON_SELLER_ID 未設定のためスキップ）');
+    } else {
+      skip('7/8 FBM 在庫取得');
+    }
+  } else {
+    step('7/8 FBM 在庫取得（Listings Items API）');
+    try {
+      const r = await runFbmInventorySync(userId);
+      if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[fbm-sync] ${e}`));
+      ok('fbm_inventory', `対象SKU ${r.skuCount}件、取得 ${r.fetched}件、保存 ${r.saved}件`);
+    } catch (e) {
+      const msg = (e as Error)?.message ?? String(e);
+      allErrors.push(`[fbm-sync] ${msg}`);
+      console.error(`✗ FBM 在庫取得 error: ${msg}`);
+    }
+  }
+
+  // ── 8. mart テーブル構築 ─────────────────────────────
+  step('8/8 売上集計 mart 構築');
   try {
     const r = await runBuildSalesMart(userId);
     if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[build-mart] ${e}`));
     ok('sales_mart', `日次 ${r.daily_upserted}日、月次 ${r.monthly_upserted}ヶ月、SKU ${r.sku_upserted}件、ASIN ${r.asin_upserted}件`);
+
   } catch (e) {
     const msg = (e as Error)?.message ?? String(e);
     allErrors.push(`[build-mart] ${msg}`);

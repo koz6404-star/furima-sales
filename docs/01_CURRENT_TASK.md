@@ -7,26 +7,35 @@
 ## 現在の作業指示
 
 ### タイトル
-フリマ基盤改善（ダッシュボード強化）
+Phase14: FBM 在庫取得（Listings Items API）
 
 ### 更新日
 2026-03-16
 
 ### 状態
-完了
+実装完了 → 検証待ち
 
 ### 目的
-ダッシュボードに「経費合計」「売れ筋ランキング TOP10」を追加し、重要指標を一画面で確認できるようにする。
+FBM（自己発送）商品の出品在庫数を Amazon Listings Items API から取得し、`amazon_fbm_inventory_current` テーブルに保存する。
 
 ### 実行結果
-- `src/app/dashboard/page.tsx` を更新
-- 経費合計（手数料＋送料＋資材）カードを追加（赤色表示）
-- 売れ筋ランキング TOP10（利益順）テーブルを追加
-- sales クエリに `products(name, sku)` を JOIN して商品名を取得
+- `supabase/migrations/029_amazon_fbm_inventory_current.sql` 作成
+- `src/lib/amazon/fbm-listings.ts` 作成（Listings Items API ラッパー）
+- `src/lib/amazon/fbm-inventory-sync.ts` 作成（同期ロジック）
+- `src/lib/amazon/run-fbm-inventory-sync.ts` 作成（サービスラッパー）
+- `scripts/amazon-fbm-inventory-sync.ts` 作成（CLI スクリプト）
+- `src/app/api/amazon-fbm-inventory-sync/route.ts` 作成（API ルート）
+- `package.json` に `amazon-fbm-inventory-sync` 追加
+- `scripts/amazon-full-sync.ts` にステップ 7/8 として FBM 追加
+
+### 検証手順
+1. Supabase で migration 029 を適用する
+2. `.env.local` に `AMAZON_SELLER_ID=Axxxxxxxxx` を追加する
+3. `npm run amazon-fbm-inventory-sync -- --user-id=<UUID>` を実行する
+4. `amazon_fbm_inventory_current` テーブルに結果が入っていることを確認
 
 ### 次アクション
-- Amazon 新 UI 作成（mart 読み取り専用）— TODO #3
-- Amazon＋フリマ合算表示 — TODO #2
+Phase14 検証完了後 → Phase15（FBM 売上との結合整理）へ
 
 ---
 

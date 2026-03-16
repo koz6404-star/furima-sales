@@ -20,7 +20,7 @@
 
 | 論点 | 優先度 | 状態 | 備考 |
 |------|--------|------|------|
-| Phase14: FBM 在庫取得 | 高 | 未着手 | Listings API / inventory availability 系。FBA とは別ロジックで current 化 |
+| Phase14: FBM 在庫取得 | 高 | 実装完了・検証待ち | Listings Items API 使用。`AMAZON_SELLER_ID` 設定が必要 |
 | Phase15: FBM 売上結合 | 高 | 未着手 | Orders の FBA/FBM 区分整理・FBM 在庫減算 |
 | Phase16: Amazon 取り込み完成 | 高 | 未着手 | FBA/FBM 両対応・売上/手数料/在庫の基本統合・実運用検証 |
 | Amazon 商品原価入力 UI | 高 | 未着手 | SP-API に原価なし。SKU ごとに手動入力できる画面が必要 |

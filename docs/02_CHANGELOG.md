@@ -6,6 +6,17 @@
 
 ## 2026年3月
 
+### Phase14: FBM 在庫取得（2026-03-16）
+- `supabase/migrations/029_amazon_fbm_inventory_current.sql` 追加
+- `src/lib/amazon/fbm-listings.ts` 追加（Listings Items API ラッパー）
+- `src/lib/amazon/fbm-inventory-sync.ts` 追加（同期ロジック）
+- `src/lib/amazon/run-fbm-inventory-sync.ts` 追加
+- `scripts/amazon-fbm-inventory-sync.ts` 追加（CLI）
+- `src/app/api/amazon-fbm-inventory-sync/route.ts` 追加
+- `package.json` に `amazon-fbm-inventory-sync` 追加
+- `scripts/amazon-full-sync.ts` に FBM ステップ（7/8）追加、`--skip-fbm` オプション追加
+- 参照: `Phase14_FBM在庫取得_実装概要.md`
+
 ### フリマ基盤改善: ダッシュボード強化（2026-03-16）
 - `src/app/dashboard/page.tsx` を更新
 - 経費合計カード（手数料＋送料＋資材の合算、赤色）を追加
