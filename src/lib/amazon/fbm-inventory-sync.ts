@@ -1,24 +1,24 @@
 /**
  * FBM 在庫取得・保存（Phase14 → Phase16 改修）
  *
- * 1. 2つのソースから FBM SKU 一覧を取得:
- *    a. amazon_sales_lines の fulfillment_type='FBM'（売上のある SKU）
- *    b. amazon_inventory_current に**ない** SKU を FBM 候補として追加
- *       → FBA 在庫テーブルにない = FBM の可能性が高い
- * 2. 各 SKU に対して Listings Items API を呼び出し、出品在庫数を取得
- * 3. amazon_fbm_inventory_current に upsert
+ * 1. Reports API (GET_MERCHANT_LISTINGS_ALL_DATA) で全出品 SKU を一括取得
+ * 2. fulfillment-channel = 'DEFAULT' の SKU を FBM として抽出
+ * 3. 各 FBM SKU に対して Listings Items API で在庫数を取得
+ * 4. amazon_fbm_inventory_current に upsert
  *
+ * これにより、まだ売れていない出品商品も含めて全 FBM SKU が取得される。
  * 再実行は常に安全（upsert）。取得エラーの SKU はスキップして続行。
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getFbmListingItem } from './fbm-listings';
+import { fetchMerchantListings, extractFbmSkus } from './merchant-listings';
 import { logAmazonInfo } from './errors';
 
 export interface SyncFbmInventoryResult {
+  totalListings: number;
   skuCount: number;
   fetched: number;
   saved: number;
-  skipped: number;
   errors: string[];
 }
 
@@ -30,83 +30,61 @@ export async function syncFbmInventory(
   userId: string
 ): Promise<SyncFbmInventoryResult> {
   const result: SyncFbmInventoryResult = {
+    totalListings: 0,
     skuCount: 0,
     fetched: 0,
     saved: 0,
-    skipped: 0,
     errors: [],
   };
 
-  // ─── 1a. sales_lines から FBM SKU を取得 ────────────────────
-  const { data: salesSkuRows, error: salesSkuErr } = await supabase
-    .from('amazon_sales_lines')
-    .select('sku')
-    .eq('user_id', userId)
-    .eq('fulfillment_type', 'FBM')
-    .not('sku', 'is', null);
+  // ─── 1. Reports API で全出品レポートを取得 ──────────────────
+  let fbmSkus: string[] = [];
+  try {
+    logAmazonInfo('syncFbmInventory', { message: '出品レポートをリクエスト中（数十秒かかります）...' });
+    const allListings = await fetchMerchantListings();
+    result.totalListings = allListings.length;
 
-  if (salesSkuErr) {
-    result.errors.push(`sales SKU fetch: ${salesSkuErr.message}`);
+    // FBM（DEFAULT チャンネル・Active）の SKU を抽出
+    fbmSkus = extractFbmSkus(allListings);
+    logAmazonInfo('syncFbmInventory', {
+      message: `全出品 ${allListings.length} 件中、FBM Active: ${fbmSkus.length} 件`,
+    });
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e);
+    result.errors.push(`レポート取得失敗: ${msg}`);
+
+    // フォールバック: 既存テーブルの SKU + sales_lines の FBM SKU
+    logAmazonInfo('syncFbmInventory', { message: 'レポート失敗。フォールバックで既存データから SKU を収集します。' });
+
+    const { data: existingRows } = await supabase
+      .from('amazon_fbm_inventory_current')
+      .select('seller_sku')
+      .eq('user_id', userId);
+
+    const { data: salesRows } = await supabase
+      .from('amazon_sales_lines')
+      .select('sku')
+      .eq('user_id', userId)
+      .eq('fulfillment_type', 'FBM')
+      .not('sku', 'is', null);
+
+    const fallbackSet = new Set<string>();
+    for (const r of existingRows ?? []) if (r.seller_sku) fallbackSet.add(r.seller_sku);
+    for (const r of salesRows ?? []) if (r.sku) fallbackSet.add(r.sku as string);
+    fbmSkus = [...fallbackSet];
   }
 
-  const skuSet = new Set<string>(
-    (salesSkuRows ?? []).map((r) => r.sku as string).filter(Boolean)
-  );
+  result.skuCount = fbmSkus.length;
 
-  // ─── 1b. 既存 FBM 在庫テーブルの SKU も含める ─────────────────
-  const { data: existingFbmRows } = await supabase
-    .from('amazon_fbm_inventory_current')
-    .select('seller_sku')
-    .eq('user_id', userId);
-
-  for (const r of existingFbmRows ?? []) {
-    if (r.seller_sku) skuSet.add(r.seller_sku);
-  }
-
-  // ─── 1c. FBA 在庫にない Orders の全 SKU を FBM 候補として追加 ──
-  const { data: fbaSkuRows } = await supabase
-    .from('amazon_inventory_current')
-    .select('seller_sku')
-    .eq('user_id', userId);
-
-  const fbaSkuSet = new Set<string>(
-    (fbaSkuRows ?? []).map((r) => r.seller_sku as string).filter(Boolean)
-  );
-
-  // Orders raw の全 SKU（FBA にないものを FBM 候補に）
-  const { data: allOrderSkuRows } = await supabase
-    .from('amazon_order_items_raw')
-    .select('seller_sku')
-    .eq('user_id', userId)
-    .not('seller_sku', 'is', null);
-
-  for (const r of allOrderSkuRows ?? []) {
-    const sku = r.seller_sku as string;
-    if (sku && !fbaSkuSet.has(sku)) {
-      skuSet.add(sku);
-    }
-  }
-
-  const uniqueSkus = [...skuSet];
-  result.skuCount = uniqueSkus.length;
-
-  if (uniqueSkus.length === 0) {
+  if (fbmSkus.length === 0) {
     logAmazonInfo('syncFbmInventory', { message: 'FBM SKU なし。' });
     return result;
   }
 
-  logAmazonInfo('syncFbmInventory', { skuCount: uniqueSkus.length });
-
   const snapshotAt = new Date().toISOString();
 
-  // ─── 2. 各 SKU に対して Listings Items API 呼び出し ────────────
-  for (const sku of uniqueSkus) {
-    // FBA 在庫テーブルに既にある SKU はスキップ（FBA は別テーブルで管理）
-    if (fbaSkuSet.has(sku)) {
-      result.skipped++;
-      continue;
-    }
-
+  // ─── 2. 各 FBM SKU に対して Listings Items API で在庫数を取得 ──
+  for (const sku of fbmSkus) {
     let listingItem = null;
     try {
       listingItem = await getFbmListingItem(sku);
@@ -114,10 +92,9 @@ export async function syncFbmInventory(
     } catch (e) {
       const msg = (e as Error)?.message ?? String(e);
       result.errors.push(`SKU ${sku} fetch: ${msg}`);
-      // 取得失敗でも続行（エラーは記録して次へ）
     }
 
-    // ─── 3. amazon_fbm_inventory_current に upsert ────────────────
+    // ─── 3. amazon_fbm_inventory_current に upsert ──────────────
     const row = {
       user_id: userId,
       seller_sku: sku,
@@ -142,10 +119,10 @@ export async function syncFbmInventory(
   }
 
   logAmazonInfo('syncFbmInventory complete', {
+    totalListings: result.totalListings,
     skuCount: result.skuCount,
     fetched: result.fetched,
     saved: result.saved,
-    skipped: result.skipped,
     errors: result.errors.length,
   });
 
