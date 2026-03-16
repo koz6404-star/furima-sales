@@ -1,13 +1,13 @@
 # プロジェクト状態（正本）
 
-**更新日**: 2026-03-16（Phase14 実装）
+**更新日**: 2026-03-16（Phase15 実装）
 **参照**: `01_CURRENT_TASK.md`（作業指示）, `02_CHANGELOG.md`（変更履歴）, `03_ISSUES.md`（未解決論点）
 
 ---
 
 ## 1. どこまで完了しているか
 
-### Amazon 売上管理（FBA のみ完成。FBM は未着手）
+### Amazon 売上管理（FBA 完成。FBM Phase15 まで完了）
 
 | 区分 | 内容 | 到達点 |
 |------|------|--------|
@@ -30,6 +30,7 @@
 | **再設計 Phase7** | mart テーブル導入（amazon_sales_summary_*） | 完了・検証済み |
 | **再設計 Phase8** | Amazon UI の一時非表示（nav 削除・redirect） | 完了。新 UI 作成まで非表示 |
 | **Phase14** | FBM 在庫取得（Listings Items API → amazon_fbm_inventory_current） | 完了・検証済み（SKU5件取得確認）|
+| **Phase15** | FBM 売上結合・統合在庫（inventory_unified VIEW + SKU mart に fulfillment_type/在庫数付与） | 実装済み |
 
 ### フリマ側（基盤改善）
 
@@ -56,10 +57,8 @@
 
 ## 3. 次にやること（優先順）
 
-1. **Phase14 検証** — `AMAZON_SELLER_ID` を `.env.local` に設定し `npm run amazon-fbm-inventory-sync` で動作確認
-2. **Phase15: FBM 売上結合** — Orders の FBA/FBM 区分整理・在庫減算（Phase14 検証後）
-2. **Phase15: FBM 売上結合** — Orders の FBA/FBM 区分整理・在庫減算
-3. **Phase16: Amazon 取り込み完成整理** — FBA/FBM 両対応・実運用検証
+1. **Phase15 検証** — migration 030 適用 → `npm run amazon-build-sales-mart` で mart 再構築 → 統合在庫 API 確認
+2. **Phase16: Amazon 取り込み完成整理** — FBA/FBM 両対応・実運用検証
 4. **Amazon 商品への原価入力 UI** — SKU ごとに仕入れ原価を手動登録（SP-API に原価情報なし）
 5. **Amazon 新 UI 作成** — Phase14〜16 完了後に mart 読み取り専用画面を作成
 

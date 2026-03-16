@@ -7,35 +7,30 @@
 ## 現在の作業指示
 
 ### タイトル
-Phase14: FBM 在庫取得（Listings Items API）
+Phase15: FBM 売上結合・統合在庫
 
 ### 更新日
 2026-03-16
 
 ### 状態
-完了・検証済み（2026-03-16）
+実装済み（検証待ち）
 
 ### 目的
-FBM（自己発送）商品の出品在庫数を Amazon Listings Items API から取得し、`amazon_fbm_inventory_current` テーブルに保存する。
+FBA + FBM の在庫データを統合し、SKU 売上サマリーに fulfillment_type（FBA/FBM/MIXED）と現在庫数を付与する。
 
 ### 実行結果
-- `supabase/migrations/029_amazon_fbm_inventory_current.sql` 作成
-- `src/lib/amazon/fbm-listings.ts` 作成（Listings Items API ラッパー）
-- `src/lib/amazon/fbm-inventory-sync.ts` 作成（同期ロジック）
-- `src/lib/amazon/run-fbm-inventory-sync.ts` 作成（サービスラッパー）
-- `scripts/amazon-fbm-inventory-sync.ts` 作成（CLI スクリプト）
-- `src/app/api/amazon-fbm-inventory-sync/route.ts` 作成（API ルート）
-- `package.json` に `amazon-fbm-inventory-sync` 追加
-- `scripts/amazon-full-sync.ts` にステップ 7/8 として FBM 追加
+- `supabase/migrations/030_phase15_inventory_unified.sql` 作成（fulfillment_type/current_inventory 列追加 + 統合在庫 VIEW）
+- `src/lib/amazon/build-sales-mart.ts` 更新（FBA+FBM 在庫取得、fulfillment_type 判定、current_inventory 付与）
+- `src/app/api/amazon-inventory-unified/route.ts` 作成（統合在庫 + 売上結合 API）
 
 ### 検証手順
-1. Supabase で migration 029 を適用する
-2. `.env.local` に `AMAZON_SELLER_ID=Axxxxxxxxx` を追加する
-3. `npm run amazon-fbm-inventory-sync -- --user-id=<UUID>` を実行する
-4. `amazon_fbm_inventory_current` テーブルに結果が入っていることを確認
+1. Supabase SQL Editor で migration 030 を実行: https://supabase.com/dashboard/project/ewxzsftkxkqrvhjavrfd/sql/new
+2. `npm run amazon-build-sales-mart -- --user-id=b654d797-cae4-4af8-b22c-ffa91763698c` を実行
+3. amazon_sales_summary_sku テーブルで fulfillment_type / current_inventory が入っていることを確認: https://supabase.com/dashboard/project/ewxzsftkxkqrvhjavrfd/editor
+4. 統合在庫 API を確認: `/api/amazon-inventory-unified`
 
 ### 次アクション
-Phase14 検証完了後 → Phase15（FBM 売上との結合整理）へ
+Phase15 検証完了後 → Phase16（Amazon 取り込み完成整理）へ
 
 ---
 

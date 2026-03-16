@@ -14,6 +14,7 @@ type SalesLine = {
   product_name: string | null;
   quantity: number;
   sales_amount_yen: number | null;
+  fulfillment_type: string | null;
 };
 
 export interface BuildSalesMartResult {
@@ -38,10 +39,10 @@ export async function buildSalesMart(
 
   const computedAt = new Date().toISOString();
 
-  // 1. confirmed 売上明細を全件取得
+  // 1. confirmed 売上明細を全件取得（fulfillment_type 含む）
   const { data: lines, error: linesError } = await supabase
     .from('amazon_sales_lines')
-    .select('id, order_id, order_date, sku, asin, product_name, quantity, sales_amount_yen')
+    .select('id, order_id, order_date, sku, asin, product_name, quantity, sales_amount_yen, fulfillment_type')
     .eq('user_id', userId)
     .eq('sales_state', 'confirmed');
 
@@ -180,23 +181,52 @@ export async function buildSalesMart(
     }
   }
 
-  // 6. SKU別集計
+  // 6. SKU別集計（fulfillment_type + 在庫数を付与）
+
+  // 6a. 在庫データを取得（FBA + FBM）
+  const inventoryMap = new Map<string, { channel: string; qty: number }>();
+  const { data: fbaInv } = await supabase
+    .from('amazon_inventory_current')
+    .select('seller_sku, total_available_qty')
+    .eq('user_id', userId);
+  for (const r of fbaInv ?? []) {
+    inventoryMap.set(r.seller_sku, { channel: 'FBA', qty: r.total_available_qty ?? 0 });
+  }
+  const { data: fbmInv } = await supabase
+    .from('amazon_fbm_inventory_current')
+    .select('seller_sku, quantity')
+    .eq('user_id', userId);
+  for (const r of fbmInv ?? []) {
+    const existing = inventoryMap.get(r.seller_sku);
+    if (existing) {
+      // 両方にある場合は MIXED として合算
+      inventoryMap.set(r.seller_sku, { channel: 'MIXED', qty: existing.qty + (r.quantity ?? 0) });
+    } else {
+      inventoryMap.set(r.seller_sku, { channel: 'FBM', qty: r.quantity ?? 0 });
+    }
+  }
+
+  // 6b. SKU 別に集計
   const bySkuMap = new Map<
     string,
-    { product_name: string | null; orderIds: Set<string>; lines: typeof enriched }
+    { product_name: string | null; orderIds: Set<string>; lines: typeof enriched; ftypes: Set<string> }
   >();
   for (const r of enriched) {
     const sku = (r.sku ?? '').trim() || '(SKUなし)';
-    if (!bySkuMap.has(sku)) bySkuMap.set(sku, { product_name: r.product_name, orderIds: new Set(), lines: [] });
+    if (!bySkuMap.has(sku)) bySkuMap.set(sku, { product_name: r.product_name, orderIds: new Set(), lines: [], ftypes: new Set() });
     const cell = bySkuMap.get(sku)!;
     cell.orderIds.add(r.order_id?.trim() ?? '');
     cell.lines.push(r);
+    if (r.fulfillment_type) cell.ftypes.add(r.fulfillment_type);
   }
 
   const skuRows = [];
   for (const [sku, cell] of bySkuMap) {
     const salesTotal = cell.lines.reduce((s, l) => s + l.sales_val, 0);
     const feeTotal = cell.lines.reduce((s, l) => s + l.fee_attributed, 0);
+    const ftypeArr = [...cell.ftypes];
+    const fulfillmentType = ftypeArr.length === 0 ? null : ftypeArr.length === 1 ? ftypeArr[0] : 'MIXED';
+    const inv = inventoryMap.get(sku);
     skuRows.push({
       user_id: userId,
       sku,
@@ -207,6 +237,8 @@ export async function buildSalesMart(
       sales_amount_yen: salesTotal,
       fee_amount_yen: feeTotal,
       sales_after_fee_yen: salesTotal + feeTotal,
+      fulfillment_type: fulfillmentType,
+      current_inventory: inv?.qty ?? null,
       computed_at: computedAt,
     });
   }

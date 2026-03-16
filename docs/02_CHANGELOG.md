@@ -6,6 +6,11 @@
 
 ## 2026年3月
 
+### Phase15: FBM 売上結合・統合在庫（2026-03-16）
+- `supabase/migrations/030_phase15_inventory_unified.sql` 追加（SKU mart に fulfillment_type/current_inventory 列追加 + 統合在庫 VIEW）
+- `src/lib/amazon/build-sales-mart.ts` 更新（FBA+FBM 在庫取得→SKU別にfulfillment_type判定・在庫数付与）
+- `src/app/api/amazon-inventory-unified/route.ts` 追加（FBA+FBM+売上サマリー統合 GET API）
+
 ### Phase14: FBM 在庫取得（2026-03-16）
 - `supabase/migrations/029_amazon_fbm_inventory_current.sql` 追加
 - `src/lib/amazon/fbm-listings.ts` 追加（Listings Items API ラッパー）

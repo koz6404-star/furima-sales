@@ -21,7 +21,7 @@
 | 論点 | 優先度 | 状態 | 備考 |
 |------|--------|------|------|
 | Phase14: FBM 在庫取得 | - | 完了 | 検証済み。SKU5件取得確認 |
-| Phase15: FBM 売上結合 | 高 | 未着手 | Orders の FBA/FBM 区分整理・FBM 在庫減算 |
+| Phase15: FBM 売上結合 | - | 実装済み | 統合在庫 VIEW + SKU mart に fulfillment_type/在庫数付与。検証待ち |
 | Phase16: Amazon 取り込み完成 | 高 | 未着手 | FBA/FBM 両対応・売上/手数料/在庫の基本統合・実運用検証 |
 | Amazon 商品原価入力 UI | 高 | 未着手 | SP-API に原価なし。SKU ごとに手動入力できる画面が必要 |
 
