@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 /**
  * Phase11, Phase12, Phase13 検証ロジックを Supabase 直接クエリで実行
  * Service Role で認証をバイパスする
@@ -12,7 +12,10 @@ dotenv.config();
 
 import { createClient } from '@supabase/supabase-js';
 
-const ADJUSTMENT_TYPES_FEE_LIKE = new Set(['PostageBilling', 'PostageRefund']);
+function isAdjustmentTypeFeeLike(adjType) {
+  const t = (adjType ?? '').trim();
+  return t.startsWith('PostageBilling') || t.startsWith('PostageRefund');
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -27,7 +30,7 @@ const supabase = createClient(supabaseUrl, serviceRoleKey);
 async function main() {
   const { data: firstRows } = await supabase.from('amazon_sales_lines').select('user_id').limit(1);
 
-  const userId = firstLine?.user_id;
+  const userId = firstRows?.[0]?.user_id;
   if (!userId) {
     console.log(JSON.stringify({ error: 'amazon_sales_lines にレコードがありません', phase11: null, phase12: null, phase13: null }));
     return;
@@ -144,7 +147,7 @@ async function main() {
       : 0);
     const roundedYen = Math.round(isNaN(yen) ? 0 : yen);
 
-    if (ADJUSTMENT_TYPES_FEE_LIKE.has(adjType) && r.order_id) {
+    if (isAdjustmentTypeFeeLike(adjType) && r.order_id) {
       if (includedSamples.length < 5) {
         includedSamples.push({ type: adjType, order_id: r.order_id, amount_yen: roundedYen });
       }
@@ -191,7 +194,7 @@ async function main() {
     },
     adjustmentTypes: {
       counts: adjustmentTypeCounts,
-      adopted: [...ADJUSTMENT_TYPES_FEE_LIKE],
+      adopted: ['PostageBilling*', 'PostageRefund* (startsWith)'],
       excludedSample: excludedSamples,
       includedSample: includedSamples,
     },
@@ -253,7 +256,7 @@ async function main() {
 
   const salesTotal = lines.reduce((s, r) => s + (Number(r.sales_amount_yen) || 0), 0);
   const feeTotal = [...new Set(lines.map((r) => r.order_id))].reduce((s, oid) => s + (feeMap[oid ?? ''] ?? 0), 0);
-  const salesAfterFee = salesTotal - feeTotal;
+  const salesAfterFee = salesTotal + feeTotal; // Phase14: 差引後 = 売上 + fee
 
   const byDayMap = new Map();
   for (const r of lines) {
@@ -275,7 +278,7 @@ async function main() {
       line_count: lines.filter((l) => l.order_date?.slice(0, 10) === date).length,
       sales_amount_yen: c.sales,
       fee_amount_yen: c.fee,
-      sales_after_fee_yen: c.sales - c.fee,
+      sales_after_fee_yen: c.sales + c.fee,
     }));
 
   const byMonthMap = new Map();
@@ -298,7 +301,7 @@ async function main() {
       line_count: lines.filter((l) => l.order_date?.slice(0, 7) === month).length,
       sales_amount_yen: c.sales,
       fee_amount_yen: c.fee,
-      sales_after_fee_yen: c.sales - c.fee,
+      sales_after_fee_yen: c.sales + c.fee,
     }));
 
   const orderSalesMap = {};
@@ -323,7 +326,7 @@ async function main() {
     c.fee += feeAtt;
   }
   const bySkuSample = [...skuMap.entries()]
-    .map(([sku, c]) => ({ sku, sales_amount_yen: c.sales, fee_amount_yen: c.fee, sales_after_fee_yen: c.sales - c.fee }))
+    .map(([sku, c]) => ({ sku, sales_amount_yen: c.sales, fee_amount_yen: c.fee, sales_after_fee_yen: c.sales + c.fee }))
     .sort((a, b) => b.sales_amount_yen - a.sales_amount_yen)
     .slice(0, 5);
 
@@ -341,7 +344,7 @@ async function main() {
     c.fee += feeAtt;
   }
   const byAsinSample = [...asinMap.entries()]
-    .map(([asin, c]) => ({ asin, sales_amount_yen: c.sales, fee_amount_yen: c.fee, sales_after_fee_yen: c.sales - c.fee }))
+    .map(([asin, c]) => ({ asin, sales_amount_yen: c.sales, fee_amount_yen: c.fee, sales_after_fee_yen: c.sales + c.fee }))
     .sort((a, b) => b.sales_amount_yen - a.sales_amount_yen)
     .slice(0, 5);
 
