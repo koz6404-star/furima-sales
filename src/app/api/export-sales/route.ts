@@ -51,28 +51,28 @@ export async function GET(req: NextRequest) {
   // ── Amazon 売上明細 ──
   const { data: amazonLines } = await supabase
     .from('amazon_sales_lines')
-    .select('seller_sku, product_name, quantity, item_price_yen, purchase_date')
+    .select('sku, product_name, quantity, sales_amount_yen, order_date')
     .eq('user_id', user.id)
-    .gte('purchase_date', startDate + 'T00:00:00')
-    .lte('purchase_date', endDate + 'T23:59:59')
-    .order('purchase_date', { ascending: true });
+    .gte('order_date', startDate)
+    .lte('order_date', endDate)
+    .order('order_date', { ascending: true });
 
-  // Amazon 手数料を SKU+日付で取得（按分用）
+  // Amazon 手数料を fee_events から取得（order_id ベース、SKU なし → 全体按分）
   const { data: amazonFees } = await supabase
     .from('amazon_fee_events')
-    .select('seller_sku, fee_amount_yen, posted_at')
+    .select('fee_amount_yen, posted_date')
     .eq('user_id', user.id)
-    .gte('posted_at', startDate + 'T00:00:00')
-    .lte('posted_at', endDate + 'T23:59:59');
+    .gte('posted_date', startDate)
+    .lte('posted_date', endDate);
 
-  // SKU別手数料合計
-  const feeBySkuMap: Record<string, number> = {};
-  const unitsBySkuMap: Record<string, number> = {};
+  // 期間内の Amazon 総手数料・総売上
+  let totalAmazonFee = 0;
+  let totalAmazonRevenue = 0;
   for (const f of amazonFees ?? []) {
-    feeBySkuMap[f.seller_sku] = (feeBySkuMap[f.seller_sku] ?? 0) + (f.fee_amount_yen ?? 0);
+    totalAmazonFee += (f.fee_amount_yen ?? 0);
   }
   for (const l of amazonLines ?? []) {
-    unitsBySkuMap[l.seller_sku] = (unitsBySkuMap[l.seller_sku] ?? 0) + l.quantity;
+    totalAmazonRevenue += (l.sales_amount_yen ?? 0);
   }
 
   const rows: string[][] = [
@@ -103,23 +103,22 @@ export async function GET(req: NextRequest) {
 
   // ── Amazon 行 ──
   for (const l of amazonLines ?? []) {
-    const unitPrice = l.quantity > 0 ? Math.round(l.item_price_yen / l.quantity) : 0;
-    // SKU の手数料を販売数で按分
-    const totalFee = feeBySkuMap[l.seller_sku] ?? 0;
-    const totalUnits = unitsBySkuMap[l.seller_sku] ?? 1;
-    const feePerUnit = Math.round(totalFee / totalUnits);
-    const fee = feePerUnit * l.quantity;
-    const profit = l.item_price_yen - fee;
+    const amount = l.sales_amount_yen ?? 0;
+    const unitPrice = l.quantity > 0 ? Math.round(amount / l.quantity) : 0;
+    // 売上比率で手数料を按分
+    const ratio = totalAmazonRevenue > 0 ? amount / totalAmazonRevenue : 0;
+    const fee = Math.round(Math.abs(totalAmazonFee) * ratio);
+    const profit = amount - fee;
 
     rows.push([
-      (l.purchase_date ?? '').slice(0, 10),
+      l.order_date ?? '',
       l.product_name ?? '',
-      l.seller_sku ?? '',
+      l.sku ?? '',
       String(l.quantity),
       String(unitPrice),
-      String(l.item_price_yen),
+      String(amount),
       String(fee),
-      '0', // Amazon の送料は手数料に含まれる
+      '0',
       '0',
       String(profit),
       'Amazon',

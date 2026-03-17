@@ -172,17 +172,18 @@ export default async function DashboardPage({
   // ── Amazon 売れ筋ランキング（選択期間でフィルタ） ──
   const { data: amSalesLines } = await supabase
     .from('amazon_sales_lines')
-    .select('seller_sku, product_name, quantity, item_price_yen, purchase_date')
+    .select('sku, product_name, quantity, sales_amount_yen, order_date')
     .eq('user_id', user.id)
-    .gte('purchase_date', startDate + 'T00:00:00')
-    .lte('purchase_date', endDate + 'T23:59:59');
+    .gte('order_date', startDate)
+    .lte('order_date', endDate);
 
   for (const sl of amSalesLines ?? []) {
-    const pid = `amazon_${sl.seller_sku}`;
+    const sku = sl.sku ?? 'unknown';
+    const pid = `amazon_${sku}`;
     if (!byProduct[pid]) {
       byProduct[pid] = {
-        name: sl.product_name ?? sl.seller_sku,
-        sku: sl.seller_sku,
+        name: sl.product_name ?? sku,
+        sku: sku,
         quantity: 0,
         revenue: 0,
         profit: 0,
@@ -190,7 +191,7 @@ export default async function DashboardPage({
       };
     }
     byProduct[pid].quantity += sl.quantity;
-    byProduct[pid].revenue += sl.item_price_yen;
+    byProduct[pid].revenue += (sl.sales_amount_yen ?? 0);
   }
 
   // Amazon SKU の利益を按分（売上比率で手数料を配分）

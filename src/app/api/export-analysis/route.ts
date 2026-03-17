@@ -103,15 +103,16 @@ export async function GET(req: NextRequest) {
   // ── Amazon 売上明細（直近30日・90日の販売数計算用） ──
   const { data: amazonSalesLines } = await supabase
     .from('amazon_sales_lines')
-    .select('seller_sku, quantity, purchase_date')
+    .select('sku, quantity, order_date')
     .eq('user_id', user.id)
-    .gte('purchase_date', d90Str);
+    .gte('order_date', d90Str);
 
   const amazonRecent: Record<string, { qty30d: number; qty90d: number; lastSoldAt: string | null }> = {};
   for (const sl of amazonSalesLines || []) {
-    const key = sl.seller_sku;
+    const key = sl.sku ?? '';
+    if (!key) continue;
     if (!amazonRecent[key]) amazonRecent[key] = { qty30d: 0, qty90d: 0, lastSoldAt: null };
-    const date = (sl.purchase_date ?? '').slice(0, 10);
+    const date = sl.order_date ?? '';
     if (date >= d30Str) amazonRecent[key].qty30d += sl.quantity;
     amazonRecent[key].qty90d += sl.quantity;
     if (!amazonRecent[key].lastSoldAt || date > amazonRecent[key].lastSoldAt!) {
