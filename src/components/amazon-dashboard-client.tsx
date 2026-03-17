@@ -86,7 +86,7 @@ function CostRow({
   fulfillmentType: string | null;
   costYen: number;
   shippingYen: number;
-  onSave: (sku: string, field: 'cost_yen' | 'shipping_yen', value: number) => Promise<void>;
+  onSave: (sku: string, costYen: number, shippingYen: number) => Promise<void>;
 }) {
   const [cost, setCost] = useState(String(costYen || ''));
   const [shipping, setShipping] = useState(String(shippingYen || ''));
@@ -114,14 +114,10 @@ function CostRow({
     setErrorMsg('');
     try {
       const costNum = parseInt(cost, 10) || 0;
-      const shipNum = parseInt(shipping, 10) || 0;
+      const shipNum = isFbm ? (parseInt(shipping, 10) || 0) : 0;
 
-      // 原価を保存
-      await onSave(sku, 'cost_yen', costNum);
-      // FBM の場合は送料も保存
-      if (isFbm) {
-        await onSave(sku, 'shipping_yen', shipNum);
-      }
+      // 原価と送料を1回のリクエストでまとめて保存
+      await onSave(sku, costNum, shipNum);
 
       userEdited.current = false;
       setSaveState('saved');
@@ -225,21 +221,21 @@ export function AmazonDashboardClient() {
     load();
   }, []);
 
-  const saveCost = useCallback(async (sku: string, field: 'cost_yen' | 'shipping_yen', value: number) => {
+  const saveCost = useCallback(async (sku: string, costYen: number, shippingYen: number) => {
     const res = await fetch('/api/amazon-sku-cost', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sku, [field]: value }),
+      body: JSON.stringify({ sku, cost_yen: costYen, shipping_yen: shippingYen }),
       keepalive: true,
     });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       throw new Error(body.error ?? '保存に失敗しました');
     }
-    setCostMap((prev) => {
-      const existing = prev[sku] ?? { cost_yen: 0, shipping_yen: 0 };
-      return { ...prev, [sku]: { ...existing, [field]: value } };
-    });
+    setCostMap((prev) => ({
+      ...prev,
+      [sku]: { cost_yen: costYen, shipping_yen: shippingYen },
+    }));
   }, []);
 
   if (loading) {
