@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 
 type SkuRow = {
   sku: string;
@@ -94,9 +94,20 @@ function CostRow({
   const [errorMsg, setErrorMsg] = useState('');
   const isFbm = fulfillmentType === 'FBM' || fulfillmentType === 'MIXED';
 
-  // 外部から costYen/shippingYen が更新されたら反映
-  useEffect(() => { setCost(String(costYen || '')); }, [costYen]);
-  useEffect(() => { setShipping(String(shippingYen || '')); }, [shippingYen]);
+  // ユーザーが編集中かどうか（編集中は外部からの上書きを防ぐ）
+  const userEdited = useRef(false);
+
+  // 外部から costYen/shippingYen が更新されたら反映（ただしユーザー編集中は無視）
+  useEffect(() => {
+    if (!userEdited.current) {
+      setCost(String(costYen || ''));
+    }
+  }, [costYen]);
+  useEffect(() => {
+    if (!userEdited.current) {
+      setShipping(String(shippingYen || ''));
+    }
+  }, [shippingYen]);
 
   async function handleSave() {
     setSaveState('saving');
@@ -112,6 +123,7 @@ function CostRow({
         await onSave(sku, 'shipping_yen', shipNum);
       }
 
+      userEdited.current = false;
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 3000);
     } catch (e) {
@@ -123,7 +135,7 @@ function CostRow({
   return (
     <tr className="border-b border-slate-100 hover:bg-slate-50">
       <td className="py-3 px-4">
-        <div className="font-medium text-sm truncate max-w-[200px]" title={productName ?? ''}>{productName ?? '-'}</div>
+        <div className="font-medium text-sm truncate max-w-[400px]" title={productName ?? ''}>{productName ?? '-'}</div>
         <div className="text-xs text-slate-400 font-mono">{sku}</div>
       </td>
       <td className="py-3 px-4 text-center"><Badge type={fulfillmentType} /></td>
@@ -134,7 +146,7 @@ function CostRow({
             type="number"
             min="0"
             value={cost}
-            onChange={(e) => { setCost(e.target.value); setSaveState('idle'); }}
+            onChange={(e) => { setCost(e.target.value); userEdited.current = true; setSaveState('idle'); }}
             placeholder="0"
             className="w-24 px-2 py-1.5 text-right text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
           />
@@ -148,7 +160,7 @@ function CostRow({
               type="number"
               min="0"
               value={shipping}
-              onChange={(e) => { setShipping(e.target.value); setSaveState('idle'); }}
+              onChange={(e) => { setShipping(e.target.value); userEdited.current = true; setSaveState('idle'); }}
               placeholder="0"
               className="w-24 px-2 py-1.5 text-right text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
             />
@@ -365,7 +377,7 @@ export function AmazonDashboardClient() {
                 return (
                   <tr key={r.sku} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-2 px-4 font-mono text-xs">{r.sku}</td>
-                    <td className="py-2 px-4 truncate max-w-[200px]" title={r.product_name ?? ''}>{r.product_name ?? '-'}</td>
+                    <td className="py-2 px-4 truncate max-w-[400px]" title={r.product_name ?? ''}>{r.product_name ?? '-'}</td>
                     <td className="py-2 px-4 text-center"><Badge type={r.fulfillment_type} /></td>
                     <td className="py-2 px-4 text-right">{r.units_sold}</td>
                     <td className="py-2 px-4 text-right">¥{r.sales_amount_yen.toLocaleString()}</td>
@@ -463,7 +475,7 @@ export function AmazonDashboardClient() {
               {inventoryItems.map((r) => (
                 <tr key={`${r.seller_sku}-${r.channel_type}`} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="py-2 px-4 font-mono text-xs">{r.seller_sku}</td>
-                  <td className="py-2 px-4 truncate max-w-[200px]" title={r.product_name ?? ''}>{r.product_name ?? '-'}</td>
+                  <td className="py-2 px-4 truncate max-w-[400px]" title={r.product_name ?? ''}>{r.product_name ?? '-'}</td>
                   <td className="py-2 px-4 text-center"><Badge type={r.channel_type} /></td>
                   <td className="py-2 px-4 text-right font-medium">{r.available_qty}</td>
                   <td className="py-2 px-4 text-right text-slate-500">{r.inbound_qty}</td>
