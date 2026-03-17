@@ -102,7 +102,6 @@ export default async function DashboardPage({
   let amazonAfterFee = 0;
 
   if (period === 'year') {
-    // 月次 mart テーブルから取得
     const startMonth = `${year}-01`;
     const endMonth = `${year}-12`;
     const { data: amMonthly } = await supabase
@@ -116,14 +115,12 @@ export default async function DashboardPage({
       amazonRevenue += r.sales_amount_yen;
       amazonFee += r.fee_amount_yen;
       amazonAfterFee += r.sales_after_fee_yen;
-      // チャートにも合算
-      const key = r.month; // "2026-03" 形式
+      const key = r.month;
       if (!chartByKey[key]) chartByKey[key] = { revenue: 0, profit: 0 };
       chartByKey[key].revenue += r.sales_amount_yen;
       chartByKey[key].profit += r.sales_after_fee_yen;
     }
   } else {
-    // 日次 mart テーブルから取得
     const { data: amDaily } = await supabase
       .from('amazon_sales_summary_daily')
       .select('date, order_count, units_sold, sales_amount_yen, fee_amount_yen, sales_after_fee_yen')
@@ -135,52 +132,90 @@ export default async function DashboardPage({
       amazonRevenue += r.sales_amount_yen;
       amazonFee += r.fee_amount_yen;
       amazonAfterFee += r.sales_after_fee_yen;
-      // チャートにも合算
-      const key = r.date; // "2026-03-15" 形式
+      const key = r.date;
       if (!chartByKey[key]) chartByKey[key] = { revenue: 0, profit: 0 };
       chartByKey[key].revenue += r.sales_amount_yen;
       chartByKey[key].profit += r.sales_after_fee_yen;
     }
   }
 
-  // Amazon SKU 別（売れ筋ランキング用）
-  const { data: amSkuRows } = await supabase
-    .from('amazon_sales_summary_sku')
-    .select('sku, product_name, units_sold, sales_amount_yen, fee_amount_yen, sales_after_fee_yen')
-    .eq('user_id', user.id)
-    .order('sales_after_fee_yen', { ascending: false })
-    .limit(20);
+  // ── Amazon 手数料の内訳（fee_events から手数料/送料を分離） ──
+  const SHIPPING_FEE_TYPES = new Set([
+    'FBAPerUnitFulfillmentFee', 'FBAPerOrderFulfillmentFee', 'FBAWeightBasedFee',
+    'ShippingCharge', 'ShippingTax', 'ShippingDiscount',
+    'ShippingLabel', 'Shipping label purchase',
+    'PostageBilling', 'PostageBilling_VAT', 'PostageRefund',
+  ]);
 
-  for (const r of amSkuRows ?? []) {
-    const pid = `amazon_${r.sku}`;
+  let amazonCommission = 0; // 販売手数料
+  let amazonShipping = 0;   // 配送関連費用
+
+  const { data: feeEvents } = await supabase
+    .from('amazon_fee_events')
+    .select('fee_type, fee_amount_yen')
+    .eq('user_id', user.id)
+    .gte('posted_date', startDate)
+    .lte('posted_date', endDate);
+
+  for (const fe of feeEvents ?? []) {
+    const isShipping = SHIPPING_FEE_TYPES.has(fe.fee_type) ||
+      (fe.fee_type ?? '').startsWith('PostageBilling') ||
+      (fe.fee_type ?? '').startsWith('PostageRefund') ||
+      (fe.fee_type ?? '').startsWith('FBA');
+    if (isShipping) {
+      amazonShipping += fe.fee_amount_yen;
+    } else {
+      amazonCommission += fe.fee_amount_yen;
+    }
+  }
+
+  // ── Amazon 売れ筋ランキング（選択期間でフィルタ） ──
+  const { data: amSalesLines } = await supabase
+    .from('amazon_sales_lines')
+    .select('seller_sku, product_name, quantity, item_price_yen, purchase_date')
+    .eq('user_id', user.id)
+    .gte('purchase_date', startDate + 'T00:00:00')
+    .lte('purchase_date', endDate + 'T23:59:59');
+
+  for (const sl of amSalesLines ?? []) {
+    const pid = `amazon_${sl.seller_sku}`;
     if (!byProduct[pid]) {
       byProduct[pid] = {
-        name: r.product_name ?? r.sku,
-        sku: r.sku,
+        name: sl.product_name ?? sl.seller_sku,
+        sku: sl.seller_sku,
         quantity: 0,
         revenue: 0,
         profit: 0,
         source: 'Amazon',
       };
     }
-    byProduct[pid].quantity += r.units_sold;
-    byProduct[pid].revenue += r.sales_amount_yen;
-    byProduct[pid].profit += r.sales_after_fee_yen;
+    byProduct[pid].quantity += sl.quantity;
+    byProduct[pid].revenue += sl.item_price_yen;
   }
 
-  // Amazon をプラットフォーム別に追加
+  // Amazon SKU の利益を按分（売上比率で手数料を配分）
+  const amazonSkuKeys = Object.keys(byProduct).filter((k) => k.startsWith('amazon_'));
+  if (amazonRevenue > 0) {
+    for (const key of amazonSkuKeys) {
+      const p = byProduct[key];
+      const ratio = p.revenue / amazonRevenue;
+      p.profit = Math.round(p.revenue + (amazonFee * ratio)); // fee is negative
+    }
+  }
+
+  // Amazon をプラットフォーム別に追加（手数料/送料を分離）
   if (amazonRevenue > 0 || amazonFee !== 0) {
-    byPlatform['Amazon(自動)'] = {
+    byPlatform['Amazon'] = {
       revenue: amazonRevenue,
-      fee: Math.abs(amazonFee),
-      shipping: 0,
+      fee: Math.abs(amazonCommission),
+      shipping: Math.abs(amazonShipping),
       profit: amazonAfterFee,
     };
   }
 
   // ── 全チャネル合算 ──
   const totalRevenue = frimaRevenue + amazonRevenue;
-  const totalExpense = frimaFee + frimaShipping + frimaMaterial + Math.abs(amazonFee);
+  const totalExpense = frimaFee + frimaShipping + frimaMaterial + Math.abs(amazonCommission) + Math.abs(amazonShipping);
   const totalProfit = frimaProfit + amazonAfterFee;
 
   const productRanking = Object.values(byProduct)
@@ -253,11 +288,11 @@ export default async function DashboardPage({
         <div className="grid gap-4 md:grid-cols-3 mb-6">
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <h3 className="text-sm font-medium text-slate-500">手数料合計</h3>
-            <p className="text-xl font-bold mt-2">¥{(frimaFee + Math.abs(amazonFee)).toLocaleString()}</p>
+            <p className="text-xl font-bold mt-2">¥{(frimaFee + Math.abs(amazonCommission)).toLocaleString()}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-6">
-            <h3 className="text-sm font-medium text-slate-500">送料合計</h3>
-            <p className="text-xl font-bold mt-2">¥{frimaShipping.toLocaleString()}</p>
+            <h3 className="text-sm font-medium text-slate-500">送料合計<span className="text-xs font-normal ml-1">（FBA配送料含む）</span></h3>
+            <p className="text-xl font-bold mt-2">¥{(frimaShipping + Math.abs(amazonShipping)).toLocaleString()}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <h3 className="text-sm font-medium text-slate-500">資材代合計</h3>
@@ -295,8 +330,8 @@ export default async function DashboardPage({
                     <tr className="border-t-2 border-slate-300 font-bold">
                       <td className="py-2">合計</td>
                       <td className="py-2 text-right">¥{totalRevenue.toLocaleString()}</td>
-                      <td className="py-2 text-right">¥{(frimaFee + Math.abs(amazonFee)).toLocaleString()}</td>
-                      <td className="py-2 text-right">¥{frimaShipping.toLocaleString()}</td>
+                      <td className="py-2 text-right">¥{(frimaFee + Math.abs(amazonCommission)).toLocaleString()}</td>
+                      <td className="py-2 text-right">¥{(frimaShipping + Math.abs(amazonShipping)).toLocaleString()}</td>
                       <td className="py-2 text-right text-emerald-600">¥{totalProfit.toLocaleString()}</td>
                     </tr>
                   )}
@@ -313,7 +348,7 @@ export default async function DashboardPage({
           </div>
 
           <div className="rounded-lg border border-slate-200 bg-white p-6">
-            <h2 className="font-bold text-lg mb-4">売れ筋ランキング TOP10<span className="text-sm font-normal text-slate-500 ml-2">（利益順・全チャネル）</span></h2>
+            <h2 className="font-bold text-lg mb-4">売れ筋ランキング TOP10<span className="text-sm font-normal text-slate-500 ml-2">（{periodLabel} / 利益順・全チャネル）</span></h2>
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
