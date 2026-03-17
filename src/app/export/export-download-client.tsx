@@ -11,7 +11,7 @@ export function ExportDownloadClient() {
       onClick={handleDownload}
       className="rounded bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
     >
-      詳細分析用データをダウンロード
+      戦略分析データをダウンロード
     </button>
   );
 }
