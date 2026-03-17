@@ -79,7 +79,7 @@ function CostCell({
 }: {
   sku: string;
   costYen: number | undefined;
-  onSave: (sku: string, cost: number) => Promise<void>;
+  onSave: (sku: string, value: number) => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
@@ -147,7 +147,7 @@ function CostCell({
 export function AmazonDashboardClient() {
   const [summary, setSummary] = useState<SummaryData | null>(null);
   const [inventory, setInventory] = useState<InventoryData | null>(null);
-  const [costMap, setCostMap] = useState<Record<string, number>>({});
+  const [costMap, setCostMap] = useState<Record<string, { cost_yen: number; shipping_yen: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<'sku' | 'inventory' | 'monthly'>('sku');
@@ -179,14 +179,17 @@ export function AmazonDashboardClient() {
     load();
   }, []);
 
-  async function saveCost(sku: string, costYen: number) {
+  async function saveCost(sku: string, field: 'cost_yen' | 'shipping_yen', value: number) {
     const res = await fetch('/api/amazon-sku-cost', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sku, cost_yen: costYen }),
+      body: JSON.stringify({ sku, [field]: value }),
     });
     if (!res.ok) throw new Error('保存に失敗しました');
-    setCostMap((prev) => ({ ...prev, [sku]: costYen }));
+    setCostMap((prev) => {
+      const existing = prev[sku] ?? { cost_yen: 0, shipping_yen: 0 };
+      return { ...prev, [sku]: { ...existing, [field]: value } };
+    });
   }
 
   if (loading) {
@@ -216,9 +219,10 @@ export function AmazonDashboardClient() {
   let totalProfit: number | null = null;
   let costEnteredCount = 0;
   for (const r of skuRows) {
-    const cost = costMap[r.sku];
-    if (cost != null) {
-      const profit = r.sales_after_fee_yen - cost * r.units_sold;
+    const entry = costMap[r.sku];
+    if (entry && entry.cost_yen > 0) {
+      const unitCost = entry.cost_yen + (entry.shipping_yen ?? 0);
+      const profit = r.sales_after_fee_yen - unitCost * r.units_sold;
       totalProfit = (totalProfit ?? 0) + profit;
       costEnteredCount++;
     }
@@ -296,14 +300,20 @@ export function AmazonDashboardClient() {
                 <th className="py-3 px-4 text-right font-medium text-slate-600">手数料</th>
                 <th className="py-3 px-4 text-right font-medium text-slate-600">差引後</th>
                 <th className="py-3 px-3 text-right font-medium text-slate-600">原価<span className="text-xs font-normal block text-slate-400">クリックで入力</span></th>
+                <th className="py-3 px-3 text-right font-medium text-slate-600">送料<span className="text-xs font-normal block text-slate-400">FBM用</span></th>
                 <th className="py-3 px-4 text-right font-medium text-slate-600">粗利</th>
                 <th className="py-3 px-4 text-right font-medium text-slate-600">在庫</th>
               </tr>
             </thead>
             <tbody>
               {skuRows.map((r) => {
-                const cost = costMap[r.sku];
-                const profit = cost != null ? r.sales_after_fee_yen - cost * r.units_sold : null;
+                const entry = costMap[r.sku];
+                const costYen = entry?.cost_yen;
+                const shippingYen = entry?.shipping_yen ?? 0;
+                const hasCost = costYen != null && costYen > 0;
+                const unitCost = (costYen ?? 0) + shippingYen;
+                const profit = hasCost ? r.sales_after_fee_yen - unitCost * r.units_sold : null;
+                const isFbm = r.fulfillment_type === 'FBM' || r.fulfillment_type === 'MIXED';
                 return (
                   <tr key={r.sku} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-2 px-4 font-mono text-xs">{r.sku}</td>
@@ -314,7 +324,14 @@ export function AmazonDashboardClient() {
                     <td className="py-2 px-4 text-right text-rose-600">¥{Math.abs(r.fee_amount_yen).toLocaleString()}</td>
                     <td className="py-2 px-4 text-right text-emerald-600 font-medium">¥{r.sales_after_fee_yen.toLocaleString()}</td>
                     <td className="py-2 px-3 text-right">
-                      <CostCell sku={r.sku} costYen={cost} onSave={saveCost} />
+                      <CostCell sku={r.sku} costYen={costYen} onSave={(sku, val) => saveCost(sku, 'cost_yen', val)} />
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {isFbm ? (
+                        <CostCell sku={r.sku} costYen={shippingYen || undefined} onSave={(sku, val) => saveCost(sku, 'shipping_yen', val)} />
+                      ) : (
+                        <span className="text-slate-300 text-xs">FBA</span>
+                      )}
                     </td>
                     <td className={`py-2 px-4 text-right font-medium ${profit != null && profit >= 0 ? 'text-emerald-600' : profit != null ? 'text-rose-600' : 'text-slate-300'}`}>
                       {profit != null ? `¥${profit.toLocaleString()}` : '---'}
@@ -324,7 +341,7 @@ export function AmazonDashboardClient() {
                 );
               })}
               {skuRows.length === 0 && (
-                <tr><td colSpan={10} className="py-8 text-center text-slate-400">SKU データがありません</td></tr>
+                <tr><td colSpan={11} className="py-8 text-center text-slate-400">SKU データがありません</td></tr>
               )}
             </tbody>
           </table>
