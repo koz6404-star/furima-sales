@@ -38,6 +38,7 @@ type InventoryRow = {
 type SummaryData = {
   ok: boolean;
   source: string;
+  postage_total_yen?: number;
   summary: {
     total: {
       order_count: number;
@@ -215,6 +216,9 @@ export function AmazonDashboardClient() {
   const monthlyRows = summary?.summary?.by_month ?? [];
   const inventoryItems = inventory?.items ?? [];
 
+  // 配送ラベル代（PostageBilling）合計
+  const postageTotalYen = summary?.postage_total_yen ?? 0;
+
   // 原価が入力されている SKU の利益合計
   let totalProfit: number | null = null;
   let costEnteredCount = 0;
@@ -231,7 +235,7 @@ export function AmazonDashboardClient() {
   return (
     <div>
       {/* サマリーカード */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h3 className="text-sm font-medium text-slate-500">売上合計</h3>
           <p className="text-2xl font-bold mt-2">¥{(total?.sales_amount_yen ?? 0).toLocaleString()}</p>
@@ -239,6 +243,12 @@ export function AmazonDashboardClient() {
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h3 className="text-sm font-medium text-slate-500">手数料合計</h3>
           <p className="text-2xl font-bold mt-2 text-rose-600">¥{Math.abs(total?.fee_amount_yen ?? 0).toLocaleString()}</p>
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-6">
+          <h3 className="text-sm font-medium text-slate-500">配送ラベル代<span className="text-xs font-normal ml-1">（Buy Shipping）</span></h3>
+          <p className={`text-2xl font-bold mt-2 ${postageTotalYen < 0 ? 'text-rose-600' : 'text-slate-300'}`}>
+            {postageTotalYen !== 0 ? `¥${Math.abs(postageTotalYen).toLocaleString()}` : '---'}
+          </p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h3 className="text-sm font-medium text-slate-500">手数料差引後</h3>

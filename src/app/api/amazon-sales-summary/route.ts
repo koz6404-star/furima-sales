@@ -269,11 +269,20 @@ export async function GET(req: Request) {
       source = 'on_demand';
     }
 
+    // 配送ラベル代合計を取得（Settlement Report 由来 or 旧 __POSTAGE__）
+    const { data: postageRows } = await supabase
+      .from('amazon_fee_events')
+      .select('fee_amount_yen')
+      .eq('user_id', user.id)
+      .or('fee_type.eq.ShippingLabelPurchase,order_id.eq.__POSTAGE__');
+    const postage_total_yen = (postageRows ?? []).reduce((s, r) => s + (Number(r.fee_amount_yen) || 0), 0);
+
     return NextResponse.json({
       ok: true,
       source,
       from: from ?? null,
       to: to ?? null,
+      postage_total_yen,
       note: '集計基準: sales_state=confirmed, order_date（売上日）. source=mart は事前集計テーブルから読み取り。npm run amazon-build-sales-mart で更新。',
       summary: { total, by_day: byDay, by_month: byMonth, by_sku: bySku, by_asin: byAsin },
     });

@@ -15,7 +15,11 @@ export function isAdjustmentTypeFeeLike(adjType: string): boolean {
 }
 
 type FeeComponent = { FeeType?: string; FeeAmount?: { CurrencyCode?: string; CurrencyAmount?: number }; [key: string]: unknown };
-type ShipmentItem = { ItemFeeList?: FeeComponent[]; ItemFeeAdjustmentList?: FeeComponent[]; [key: string]: unknown };
+type ChargeComponent = { ChargeType?: string; ChargeAmount?: { CurrencyCode?: string; CurrencyAmount?: number }; [key: string]: unknown };
+type ShipmentItem = { ItemFeeList?: FeeComponent[]; ItemFeeAdjustmentList?: FeeComponent[]; ItemChargeList?: ChargeComponent[]; ItemChargeAdjustmentList?: ChargeComponent[]; [key: string]: unknown };
+
+/** Principal は sales_amount_yen 側で計上済みなので除外。送料系のみ fee_events に取り込む */
+const SHIPPING_CHARGE_TYPES = new Set(['ShippingCharge', 'ShippingTax', 'ShippingDiscount']);
 
 function toYMD(val: string | undefined): string | null {
   if (!val) return null;
@@ -83,7 +87,26 @@ function collectFees(
     addList(ev.ShipmentFeeList as FeeComponent[]);
     const items = ev.ShipmentItemList as ShipmentItem[] | undefined;
     if (Array.isArray(items)) {
-      for (const item of items) addList(item?.ItemFeeList);
+      for (const item of items) {
+        addList(item?.ItemFeeList);
+        // ItemChargeList から送料系のみ抽出（Principal は sales_amount_yen で計上済）
+        if (Array.isArray(item?.ItemChargeList)) {
+          for (const c of item.ItemChargeList) {
+            if (SHIPPING_CHARGE_TYPES.has(c.ChargeType ?? '')) {
+              addFee({ FeeType: c.ChargeType, FeeAmount: c.ChargeAmount } as FeeComponent, false);
+            }
+          }
+        }
+      }
+    }
+    // OrderChargeList から送料系のみ抽出
+    const orderCharges = ev.OrderChargeList as ChargeComponent[] | undefined;
+    if (Array.isArray(orderCharges)) {
+      for (const c of orderCharges) {
+        if (SHIPPING_CHARGE_TYPES.has(c.ChargeType ?? '')) {
+          addFee({ FeeType: c.ChargeType, FeeAmount: c.ChargeAmount } as FeeComponent, false);
+        }
+      }
     }
   } else if (transactionType === 'ServiceFeeEventList') {
     const fl = ev.FeeList as FeeComponent[] | undefined;
@@ -96,7 +119,26 @@ function collectFees(
     addList(ev.ShipmentFeeAdjustmentList as FeeComponent[]);
     const items = ev.ShipmentItemAdjustmentList as ShipmentItem[] | undefined;
     if (Array.isArray(items)) {
-      for (const item of items) addList(item?.ItemFeeAdjustmentList);
+      for (const item of items) {
+        addList(item?.ItemFeeAdjustmentList);
+        // 返金時の送料チャージ調整も取り込む
+        if (Array.isArray(item?.ItemChargeAdjustmentList)) {
+          for (const c of item.ItemChargeAdjustmentList) {
+            if (SHIPPING_CHARGE_TYPES.has(c.ChargeType ?? '')) {
+              addFee({ FeeType: c.ChargeType, FeeAmount: c.ChargeAmount } as FeeComponent, true);
+            }
+          }
+        }
+      }
+    }
+    // OrderChargeAdjustmentList から送料系のみ
+    const orderChargeAdj = ev.OrderChargeAdjustmentList as ChargeComponent[] | undefined;
+    if (Array.isArray(orderChargeAdj)) {
+      for (const c of orderChargeAdj) {
+        if (SHIPPING_CHARGE_TYPES.has(c.ChargeType ?? '')) {
+          addFee({ FeeType: c.ChargeType, FeeAmount: c.ChargeAmount } as FeeComponent, true);
+        }
+      }
     }
   } else if (transactionType === 'AdjustmentEventList') {
     // Phase12/Phase14: AdjustmentAmount を採用。符号は payload のまま。startsWith で実データに合わせる
@@ -169,12 +211,20 @@ export async function transformRawToFeeEvents(
 
   for (const r of rawRows ?? []) {
     result.processed++;
-    const orderId = r.order_id ?? extractOrderId((r.payload_json ?? {}) as Record<string, unknown>);
-    if (!orderId || !String(orderId).trim()) {
-      result.skipped++;
-      continue;
-    }
     const payload = r.payload_json as Record<string, unknown>;
+    let orderId = r.order_id ?? extractOrderId((payload ?? {}) as Record<string, unknown>);
+
+    // PostageBilling はアカウントレベル請求のため order_id がない。
+    // プレースホルダーを使って保存し、ダッシュボードで合計表示する。
+    if (!orderId || !String(orderId).trim()) {
+      const adjType = String((payload ?? {}).AdjustmentType ?? (payload ?? {}).adjustmentType ?? '');
+      if (isAdjustmentTypeFeeLike(adjType)) {
+        orderId = '__POSTAGE__';
+      } else {
+        result.skipped++;
+        continue;
+      }
+    }
     const postedDate = toYMD(r.posted_date as string) ?? extractPostedDate(payload);
     const lines = collectFees(
       payload ?? {},
