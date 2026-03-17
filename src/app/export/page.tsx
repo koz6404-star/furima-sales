@@ -26,7 +26,7 @@ export default async function ExportPage() {
         <div className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="font-semibold mb-2">詳細分析用データ</h2>
           <p className="text-slate-600 text-sm mb-4">
-            商品ごとの販売実績・在庫状況・利益率などをまとめたデータです。直近30日・90日の販売数も含みます。
+            フリマ＋Amazonの全商品を統合した販売実績・在庫状況・利益率データです。直近30日・90日の販売数も含みます。
           </p>
           <ExportDownloadClient />
         </div>

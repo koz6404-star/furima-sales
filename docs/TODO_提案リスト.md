@@ -76,6 +76,7 @@ Vercel Cron で毎日 JST 3:00 に自動実行。環境変数 CRON_SECRET / AMAZ
 
 ## ✅ 完了済み
 
+- CSVエクスポート Amazon統合: フリマ+Amazon を同一CSV出力（2026-03-17）
 - TODO#2 Amazon＋フリマ合算表示: ダッシュボード全チャネル統合（2026-03-17）
 - TODO#3 Amazon 新画面: `/amazon-dashboard` 作成済み（Phase16, 2026-03-16）
 - TODO#7 amazon-full-sync 定期自動実行: Vercel Cron 毎日 JST 3:00（2026-03-17）

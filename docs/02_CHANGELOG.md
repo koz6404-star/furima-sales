@@ -6,6 +6,15 @@
 
 ## 2026年3月
 
+### CSVエクスポート Amazon統合（2026-03-17）
+- `export-analysis` API: Amazon SKU データをフリマ商品と同一CSVに統合出力
+  - 「チャネル」列を先頭に追加（フリマ / Amazon(FBA) / Amazon(FBM)）
+  - Amazon: SKU別売上・手数料・在庫・原価・直近30日/90日販売数を出力
+- `export-sales` API: Amazon 売上明細をフリマ売上と同一CSVに統合出力
+  - プラットフォーム列に「Amazon」を追加
+  - SKU別手数料を販売数で按分して1行ごとに割当
+- エクスポート画面の説明文を「フリマ＋Amazon統合」に更新
+
 ### 統合ダッシュボード（2026-03-17）
 - `/dashboard` をフリマ + Amazon 全チャネル統合に拡張
 - Amazon mart テーブル（daily/monthly/sku）をサーバーサイドで読み取り、フリマデータと合算

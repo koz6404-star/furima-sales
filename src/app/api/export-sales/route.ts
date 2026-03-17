@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
     endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   }
 
+  // ── フリマ売上 ──
   const { data: sales } = await supabase
     .from('sales')
     .select('*')
@@ -40,27 +41,46 @@ export async function GET(req: NextRequest) {
     .lte('sold_at', endDate)
     .order('sold_at', { ascending: true });
 
-  if (!sales || sales.length === 0) {
-    const headers = new Headers();
-    headers.set('Content-Type', 'text/csv; charset=utf-8');
-    headers.set('Content-Disposition', `attachment; filename="sales_${year}${period === 'year' ? '' : String(month).padStart(2, '0')}.csv"`);
-    return new NextResponse('販売日,商品名,SKU,個数,単価,売上,手数料,送料,資材代,粗利,プラットフォーム\n（データなし）', {
-      headers,
-    });
-  }
-
-  const productIds = [...new Set(sales.map((s) => s.product_id))];
+  const productIds = [...new Set((sales ?? []).map((s) => s.product_id))];
   const { data: products } = await supabase
     .from('products')
     .select('id, name, sku')
-    .in('id', productIds);
+    .in('id', productIds.length > 0 ? productIds : ['__none__']);
   const productMap = new Map((products ?? []).map((p) => [p.id, p]));
+
+  // ── Amazon 売上明細 ──
+  const { data: amazonLines } = await supabase
+    .from('amazon_sales_lines')
+    .select('seller_sku, product_name, quantity, item_price_yen, purchase_date')
+    .eq('user_id', user.id)
+    .gte('purchase_date', startDate + 'T00:00:00')
+    .lte('purchase_date', endDate + 'T23:59:59')
+    .order('purchase_date', { ascending: true });
+
+  // Amazon 手数料を SKU+日付で取得（按分用）
+  const { data: amazonFees } = await supabase
+    .from('amazon_fee_events')
+    .select('seller_sku, fee_amount_yen, posted_at')
+    .eq('user_id', user.id)
+    .gte('posted_at', startDate + 'T00:00:00')
+    .lte('posted_at', endDate + 'T23:59:59');
+
+  // SKU別手数料合計
+  const feeBySkuMap: Record<string, number> = {};
+  const unitsBySkuMap: Record<string, number> = {};
+  for (const f of amazonFees ?? []) {
+    feeBySkuMap[f.seller_sku] = (feeBySkuMap[f.seller_sku] ?? 0) + (f.fee_amount_yen ?? 0);
+  }
+  for (const l of amazonLines ?? []) {
+    unitsBySkuMap[l.seller_sku] = (unitsBySkuMap[l.seller_sku] ?? 0) + l.quantity;
+  }
 
   const rows: string[][] = [
     ['販売日', '商品名', 'SKU', '個数', '単価', '売上', '手数料', '送料', '資材代', '粗利', 'プラットフォーム'],
   ];
 
-  for (const s of sales) {
+  // ── フリマ行 ──
+  for (const s of sales ?? []) {
     const product = productMap.get(s.product_id);
     const name = product?.name ?? '(不明)';
     const sku = product?.sku ?? '';
@@ -79,6 +99,38 @@ export async function GET(req: NextRequest) {
       String(s.gross_profit_yen),
       platform,
     ]);
+  }
+
+  // ── Amazon 行 ──
+  for (const l of amazonLines ?? []) {
+    const unitPrice = l.quantity > 0 ? Math.round(l.item_price_yen / l.quantity) : 0;
+    // SKU の手数料を販売数で按分
+    const totalFee = feeBySkuMap[l.seller_sku] ?? 0;
+    const totalUnits = unitsBySkuMap[l.seller_sku] ?? 1;
+    const feePerUnit = Math.round(totalFee / totalUnits);
+    const fee = feePerUnit * l.quantity;
+    const profit = l.item_price_yen - fee;
+
+    rows.push([
+      (l.purchase_date ?? '').slice(0, 10),
+      l.product_name ?? '',
+      l.seller_sku ?? '',
+      String(l.quantity),
+      String(unitPrice),
+      String(l.item_price_yen),
+      String(fee),
+      '0', // Amazon の送料は手数料に含まれる
+      '0',
+      String(profit),
+      'Amazon',
+    ]);
+  }
+
+  if (rows.length <= 1) {
+    const headers = new Headers();
+    headers.set('Content-Type', 'text/csv; charset=utf-8');
+    headers.set('Content-Disposition', `attachment; filename="sales_${year}${period === 'year' ? '' : String(month).padStart(2, '0')}.csv"`);
+    return new NextResponse('\uFEFF' + rows[0].join(',') + '\n（データなし）', { headers });
   }
 
   const csv = rows.map((row) => row.map(escapeCsv).join(',')).join('\n');
