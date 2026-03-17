@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 type SkuRow = {
   sku: string;
@@ -72,76 +72,109 @@ function Badge({ type }: { type: string | null }) {
   );
 }
 
-/** 原価インライン編集セル */
-function CostCell({
+/** 原価管理の1行 */
+function CostRow({
   sku,
+  productName,
+  fulfillmentType,
   costYen,
+  shippingYen,
   onSave,
 }: {
   sku: string;
-  costYen: number | undefined;
-  onSave: (sku: string, value: number) => Promise<void>;
+  productName: string | null;
+  fulfillmentType: string | null;
+  costYen: number;
+  shippingYen: number;
+  onSave: (sku: string, field: 'cost_yen' | 'shipping_yen', value: number) => Promise<void>;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState('');
-  const [saving, setSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [cost, setCost] = useState(String(costYen || ''));
+  const [shipping, setShipping] = useState(String(shippingYen || ''));
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+  const isFbm = fulfillmentType === 'FBM' || fulfillmentType === 'MIXED';
 
-  function startEdit() {
-    setValue(costYen != null ? String(costYen) : '');
-    setEditing(true);
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }
+  // 外部から costYen/shippingYen が更新されたら反映
+  useEffect(() => { setCost(String(costYen || '')); }, [costYen]);
+  useEffect(() => { setShipping(String(shippingYen || '')); }, [shippingYen]);
 
-  async function commit() {
-    const num = parseInt(value, 10);
-    if (isNaN(num) || num < 0) {
-      setEditing(false);
-      return;
-    }
-    setSaving(true);
+  async function handleSave() {
+    setSaveState('saving');
+    setErrorMsg('');
     try {
-      await onSave(sku, num);
-    } finally {
-      setSaving(false);
-      setEditing(false);
+      const costNum = parseInt(cost, 10) || 0;
+      const shipNum = parseInt(shipping, 10) || 0;
+
+      // 原価を保存
+      await onSave(sku, 'cost_yen', costNum);
+      // FBM の場合は送料も保存
+      if (isFbm) {
+        await onSave(sku, 'shipping_yen', shipNum);
+      }
+
+      setSaveState('saved');
+      setTimeout(() => setSaveState('idle'), 3000);
+    } catch (e) {
+      setSaveState('error');
+      setErrorMsg((e as Error).message);
     }
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') commit();
-    if (e.key === 'Escape') setEditing(false);
-  }
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        type="number"
-        min="0"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={handleKeyDown}
-        disabled={saving}
-        className="w-20 px-1 py-0.5 text-right text-sm border border-emerald-400 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500"
-      />
-    );
   }
 
   return (
-    <button
-      type="button"
-      onClick={startEdit}
-      className="text-right w-full hover:bg-emerald-50 rounded px-1 py-0.5 transition-colors"
-      title="クリックして原価を入力"
-    >
-      {costYen != null ? (
-        <span>¥{costYen.toLocaleString()}</span>
-      ) : (
-        <span className="text-slate-300">---</span>
-      )}
-    </button>
+    <tr className="border-b border-slate-100 hover:bg-slate-50">
+      <td className="py-3 px-4">
+        <div className="font-medium text-sm truncate max-w-[200px]" title={productName ?? ''}>{productName ?? '-'}</div>
+        <div className="text-xs text-slate-400 font-mono">{sku}</div>
+      </td>
+      <td className="py-3 px-4 text-center"><Badge type={fulfillmentType} /></td>
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-1">
+          <span className="text-slate-400 text-sm">¥</span>
+          <input
+            type="number"
+            min="0"
+            value={cost}
+            onChange={(e) => { setCost(e.target.value); setSaveState('idle'); }}
+            placeholder="0"
+            className="w-24 px-2 py-1.5 text-right text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          />
+        </div>
+      </td>
+      <td className="py-3 px-4">
+        {isFbm ? (
+          <div className="flex items-center gap-1">
+            <span className="text-slate-400 text-sm">¥</span>
+            <input
+              type="number"
+              min="0"
+              value={shipping}
+              onChange={(e) => { setShipping(e.target.value); setSaveState('idle'); }}
+              placeholder="0"
+              className="w-24 px-2 py-1.5 text-right text-sm border border-slate-300 rounded focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            />
+          </div>
+        ) : (
+          <span className="text-xs text-slate-400">FBA（不要）</span>
+        )}
+      </td>
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSave}
+            disabled={saveState === 'saving'}
+            className="px-3 py-1.5 text-sm font-medium rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {saveState === 'saving' ? '保存中...' : '保存'}
+          </button>
+          {saveState === 'saved' && (
+            <span className="text-emerald-600 text-sm font-medium">保存済</span>
+          )}
+          {saveState === 'error' && (
+            <span className="text-rose-600 text-xs">{errorMsg || '保存失敗'}</span>
+          )}
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -151,7 +184,7 @@ export function AmazonDashboardClient() {
   const [costMap, setCostMap] = useState<Record<string, { cost_yen: number; shipping_yen: number }>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'sku' | 'inventory' | 'monthly'>('sku');
+  const [tab, setTab] = useState<'sku' | 'cost' | 'inventory' | 'monthly'>('sku');
 
   useEffect(() => {
     async function load() {
@@ -180,18 +213,22 @@ export function AmazonDashboardClient() {
     load();
   }, []);
 
-  async function saveCost(sku: string, field: 'cost_yen' | 'shipping_yen', value: number) {
+  const saveCost = useCallback(async (sku: string, field: 'cost_yen' | 'shipping_yen', value: number) => {
     const res = await fetch('/api/amazon-sku-cost', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sku, [field]: value }),
+      keepalive: true,
     });
-    if (!res.ok) throw new Error('保存に失敗しました');
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? '保存に失敗しました');
+    }
     setCostMap((prev) => {
       const existing = prev[sku] ?? { cost_yen: 0, shipping_yen: 0 };
       return { ...prev, [sku]: { ...existing, [field]: value } };
     });
-  }
+  }, []);
 
   if (loading) {
     return (
@@ -279,6 +316,7 @@ export function AmazonDashboardClient() {
       <div className="flex gap-1 mb-4 border-b border-slate-200">
         {([
           ['sku', 'SKU別 売上・在庫'],
+          ['cost', '原価管理'],
           ['inventory', '統合在庫一覧'],
           ['monthly', '月別集計'],
         ] as const).map(([key, label]) => (
@@ -287,7 +325,9 @@ export function AmazonDashboardClient() {
             onClick={() => setTab(key)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
               tab === key
-                ? 'border-emerald-500 text-emerald-600'
+                ? key === 'cost'
+                  ? 'border-orange-500 text-orange-600'
+                  : 'border-emerald-500 text-emerald-600'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -309,8 +349,7 @@ export function AmazonDashboardClient() {
                 <th className="py-3 px-4 text-right font-medium text-slate-600">売上</th>
                 <th className="py-3 px-4 text-right font-medium text-slate-600">手数料</th>
                 <th className="py-3 px-4 text-right font-medium text-slate-600">差引後</th>
-                <th className="py-3 px-3 text-right font-medium text-slate-600">原価<span className="text-xs font-normal block text-slate-400">クリックで入力</span></th>
-                <th className="py-3 px-3 text-right font-medium text-slate-600">送料<span className="text-xs font-normal block text-slate-400">FBM用</span></th>
+                <th className="py-3 px-4 text-right font-medium text-slate-600">原価</th>
                 <th className="py-3 px-4 text-right font-medium text-slate-600">粗利</th>
                 <th className="py-3 px-4 text-right font-medium text-slate-600">在庫</th>
               </tr>
@@ -323,7 +362,6 @@ export function AmazonDashboardClient() {
                 const hasCost = costYen != null && costYen > 0;
                 const unitCost = (costYen ?? 0) + shippingYen;
                 const profit = hasCost ? r.sales_after_fee_yen - unitCost * r.units_sold : null;
-                const isFbm = r.fulfillment_type === 'FBM' || r.fulfillment_type === 'MIXED';
                 return (
                   <tr key={r.sku} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-2 px-4 font-mono text-xs">{r.sku}</td>
@@ -333,14 +371,16 @@ export function AmazonDashboardClient() {
                     <td className="py-2 px-4 text-right">¥{r.sales_amount_yen.toLocaleString()}</td>
                     <td className="py-2 px-4 text-right text-rose-600">¥{Math.abs(r.fee_amount_yen).toLocaleString()}</td>
                     <td className="py-2 px-4 text-right text-emerald-600 font-medium">¥{r.sales_after_fee_yen.toLocaleString()}</td>
-                    <td className="py-2 px-3 text-right">
-                      <CostCell sku={r.sku} costYen={costYen} onSave={(sku, val) => saveCost(sku, 'cost_yen', val)} />
-                    </td>
-                    <td className="py-2 px-3 text-right">
-                      {isFbm ? (
-                        <CostCell sku={r.sku} costYen={shippingYen || undefined} onSave={(sku, val) => saveCost(sku, 'shipping_yen', val)} />
+                    <td className="py-2 px-4 text-right">
+                      {hasCost ? (
+                        <span>¥{unitCost.toLocaleString()}</span>
                       ) : (
-                        <span className="text-slate-300 text-xs">FBA</span>
+                        <button
+                          onClick={() => setTab('cost')}
+                          className="text-orange-500 text-xs hover:underline"
+                        >
+                          未入力
+                        </button>
                       )}
                     </td>
                     <td className={`py-2 px-4 text-right font-medium ${profit != null && profit >= 0 ? 'text-emerald-600' : profit != null ? 'text-rose-600' : 'text-slate-300'}`}>
@@ -351,10 +391,55 @@ export function AmazonDashboardClient() {
                 );
               })}
               {skuRows.length === 0 && (
-                <tr><td colSpan={11} className="py-8 text-center text-slate-400">SKU データがありません</td></tr>
+                <tr><td colSpan={10} className="py-8 text-center text-slate-400">SKU データがありません</td></tr>
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* 原価管理タブ */}
+      {tab === 'cost' && (
+        <div>
+          <div className="rounded-lg border border-orange-200 bg-orange-50 p-4 mb-4">
+            <p className="text-sm text-orange-800">
+              SKU ごとの仕入れ原価と送料（FBM のみ）を入力してください。
+              入力後「保存」ボタンを押すとデータベースに保存されます。
+              保存したデータは次回以降も保持されます。
+            </p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-white overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200">
+                  <th className="py-3 px-4 text-left font-medium text-slate-600">商品</th>
+                  <th className="py-3 px-4 text-center font-medium text-slate-600">区分</th>
+                  <th className="py-3 px-4 text-left font-medium text-slate-600">仕入れ原価（1個あたり）</th>
+                  <th className="py-3 px-4 text-left font-medium text-slate-600">送料（1個あたり）</th>
+                  <th className="py-3 px-4 text-left font-medium text-slate-600"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {skuRows.map((r) => {
+                  const entry = costMap[r.sku] ?? { cost_yen: 0, shipping_yen: 0 };
+                  return (
+                    <CostRow
+                      key={r.sku}
+                      sku={r.sku}
+                      productName={r.product_name}
+                      fulfillmentType={r.fulfillment_type}
+                      costYen={entry.cost_yen}
+                      shippingYen={entry.shipping_yen}
+                      onSave={saveCost}
+                    />
+                  );
+                })}
+                {skuRows.length === 0 && (
+                  <tr><td colSpan={5} className="py-8 text-center text-slate-400">SKU データがありません</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
