@@ -1,6 +1,6 @@
 # プロジェクト状態（正本）
 
-**更新日**: 2026-03-16（Phase16 実装）
+**更新日**: 2026-03-17（統合ダッシュボード・Vercel Cron・Settlement Postage 組込み）
 **参照**: `01_CURRENT_TASK.md`（作業指示）, `02_CHANGELOG.md`（変更履歴）, `03_ISSUES.md`（未解決論点）
 
 ---
@@ -32,6 +32,11 @@
 | **Phase14** | FBM 在庫取得（Listings Items API → amazon_fbm_inventory_current） | 完了・検証済み（SKU5件取得確認）|
 | **Phase15** | FBM 売上結合・統合在庫（inventory_unified VIEW + SKU mart に fulfillment_type/在庫数付与） | 完了・検証済み |
 | **Phase16** | Amazon 取り込み完成（新 UI 作成・nav 復活・型エラー修正・ビルド確認） | 実装済み |
+| **Phase16+** | SKU別原価入力 UI・FBM送料入力 | 実装済み（migration 031/032） |
+| **Phase16++** | 配送ラベル代を Settlement Report から注文別に自動取得・粗利反映 | 実装済み |
+| **Phase17** | Settlement Postage を full-sync に組込み | 実装済み |
+| **Phase18** | Vercel Cron で amazon-full-sync 毎日自動実行（JST 3:00） | 実装済み（環境変数設定待ち） |
+| **Phase19** | ダッシュボード全チャネル統合（フリマ + Amazon 合算表示） | 実装済み |
 
 ### フリマ側（基盤改善）
 
@@ -58,9 +63,9 @@
 
 ## 3. 次にやること（優先順）
 
-1. **Phase16 検証** — Vercel デプロイ後に `/amazon-dashboard` で動作確認
-4. **Amazon 商品への原価入力 UI** — SKU ごとに仕入れ原価を手動登録（SP-API に原価情報なし）
-5. **Amazon 新 UI 作成** — Phase14〜16 完了後に mart 読み取り専用画面を作成
+1. **Vercel 環境変数設定** — CRON_SECRET, AMAZON_CRON_USER_ID を Vercel に追加
+2. **デプロイ後の動作確認** — 統合ダッシュボード・Cron 実行の検証
+3. **原価未入力 SKU の利益計算** — Amazon SKU の原価入力率向上
 
 ---
 

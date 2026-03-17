@@ -6,6 +6,41 @@
 
 ## 2026年3月
 
+### 統合ダッシュボード（2026-03-17）
+- `/dashboard` をフリマ + Amazon 全チャネル統合に拡張
+- Amazon mart テーブル（daily/monthly/sku）をサーバーサイドで読み取り、フリマデータと合算
+- サマリーカードにフリマ/Amazon 内訳表示
+- プラットフォーム別テーブルに「Amazon(自動)」行と合計行
+- 売れ筋ランキング TOP10 に Amazon SKU も含め、販路バッジ付き
+- グラフ（日別/月別推移）に Amazon 売上も合算
+
+### Vercel Cron 定期実行（2026-03-17）
+- `src/app/api/cron/amazon-sync/route.ts` 追加（全9ステップの自動同期）
+- `vercel.json` に cron schedule 追加（毎日 UTC 18:00 = JST 3:00）
+- CRON_SECRET 認証、AMAZON_CRON_USER_ID で対象ユーザー指定
+- 環境変数: Vercel に `CRON_SECRET` と `AMAZON_CRON_USER_ID` の設定が必要
+
+### Settlement Postage を full-sync に組込み（2026-03-17）
+- `scripts/amazon-full-sync.ts` にステップ 5/9 として配送ラベル代取得を追加
+- Cron API にも同ステップを追加
+
+### 配送ラベル代自動取得（2026-03-17）
+- Settlement Report API で `Shipping label purchase` を注文番号付きで取得
+- `src/lib/amazon/settlement-postage-sync.ts` 追加（決済レポート → fee_events 保存）
+- `scripts/amazon-settlement-postage-sync.ts` 追加（CLI）
+- `transform-fee-events.ts` 更新: ItemChargeList 送料系抽出、PostageBilling order_id なし対応
+- `amazon-sales-summary` API に配送ラベル代合計を追加
+- ダッシュボードに「配送ラベル代（Buy Shipping）」カード追加
+- FBM 注文の手数料に配送ラベル代が含まれ、SKU別粗利が正確に
+
+### SKU別原価入力 UI・FBM送料入力（2026-03-17）
+- `supabase/migrations/031_amazon_sku_cost.sql` 追加（amazon_sku_cost テーブル）
+- `supabase/migrations/032_amazon_sku_cost_shipping.sql` 追加（shipping_yen 列追加）
+- `src/app/api/amazon-sku-cost/route.ts` 追加（GET/POST）
+- ダッシュボード SKU テーブルにインライン原価・送料入力セル追加
+- 粗利 = 差引後 - (原価 + 送料) × 販売数
+- 商品一覧から旧 Amazon 同期ボタン群を削除
+
 ### Phase16: Amazon 取り込み完成・新 UI（2026-03-16）
 - `src/app/amazon-dashboard/page.tsx` 追加（Amazon 売上管理画面）
 - `src/components/amazon-dashboard-client.tsx` 追加（SKU別売上・統合在庫・月別集計の3タブ）

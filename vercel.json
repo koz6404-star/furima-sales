@@ -6,6 +6,15 @@
     },
     "src/app/api/amazon-sync/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/cron/amazon-sync/route.ts": {
+      "maxDuration": 300
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/amazon-sync",
+      "schedule": "0 18 * * *"
+    }
+  ]
 }

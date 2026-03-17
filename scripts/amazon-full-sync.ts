@@ -42,6 +42,7 @@ import { runFeeEventsTransform } from '../src/lib/amazon/run-fee-events-transfor
 import { runFbaInventoryRawSync } from '../src/lib/amazon/run-fba-inventory-raw-sync';
 import { runInventoryCurrentTransform } from '../src/lib/amazon/run-inventory-current-transform';
 import { runFbmInventorySync } from '../src/lib/amazon/run-fbm-inventory-sync';
+import { runSettlementPostageSync } from '../src/lib/amazon/run-settlement-postage-sync';
 import { runBuildSalesMart } from '../src/lib/amazon/run-build-sales-mart';
 
 interface ParsedArgs {
@@ -143,9 +144,9 @@ async function main() {
 
   // ── 1. Orders 取得 ───────────────────────────────────
   if (skipOrders) {
-    skip('1/6 Orders raw 取得');
+    skip('1/9 Orders raw 取得');
   } else {
-    step('1/6 Orders raw 取得');
+    step('1/9 Orders raw 取得');
     try {
       const r = await runOrdersRawSync(userId, { createdAfter, createdBefore });
       if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[orders-sync] ${e}`));
@@ -158,7 +159,7 @@ async function main() {
   }
 
   // ── 2. sales_lines 整形 ──────────────────────────────
-  step('2/6 sales_lines 整形');
+  step('2/9 sales_lines 整形');
   try {
     const r = await runSalesLinesTransform(userId);
     if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[sales-lines] ${e}`));
@@ -171,9 +172,9 @@ async function main() {
 
   // ── 3. Finance 取得 ──────────────────────────────────
   if (skipFinance) {
-    skip('3/6 Finance raw 取得');
+    skip('3/9 Finance raw 取得');
   } else {
-    step('3/6 Finance raw 取得');
+    step('3/9 Finance raw 取得');
     try {
       const r = await runFinanceRawSync(userId);
       if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[finance-sync] ${e}`));
@@ -186,7 +187,7 @@ async function main() {
   }
 
   // ── 4. fee_events 整形 ───────────────────────────────
-  step('4/6 fee_events 整形');
+  step('4/9 fee_events 整形');
   try {
     const r = await runFeeEventsTransform(userId);
     if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[fee-events] ${e}`));
@@ -197,11 +198,23 @@ async function main() {
     console.error(`✗ fee_events 整形 error: ${msg}`);
   }
 
-  // ── 5. FBA Inventory 取得 ────────────────────────────
+  // ── 5. Settlement Postage（配送ラベル代）取得 ─────────
+  step('5/9 配送ラベル代取得（Settlement Report）');
+  try {
+    const r = await runSettlementPostageSync(userId);
+    if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[settlement-postage] ${e}`));
+    ok('settlement_postage', `レポート ${r.reports_checked}件、配送ラベル ${r.postage_rows_found}件検出、${r.saved}件保存`);
+  } catch (e) {
+    const msg = (e as Error)?.message ?? String(e);
+    allErrors.push(`[settlement-postage] ${msg}`);
+    console.error(`✗ 配送ラベル代取得 error: ${msg}`);
+  }
+
+  // ── 6. FBA Inventory 取得 ────────────────────────────
   if (skipInventory) {
-    skip('5/6 FBA Inventory raw 取得');
+    skip('6/9 FBA Inventory raw 取得');
   } else {
-    step('5/6 FBA Inventory raw 取得');
+    step('6/9 FBA Inventory raw 取得');
     try {
       const r = await runFbaInventoryRawSync(userId);
       if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[fba-sync] ${e}`));
@@ -213,8 +226,8 @@ async function main() {
     }
   }
 
-  // ── 6. inventory_current 整形 ────────────────────────
-  step('6/8 inventory_current 整形（FBA）');
+  // ── 7. inventory_current 整形 ────────────────────────
+  step('7/9 inventory_current 整形（FBA）');
   try {
     const r = await runInventoryCurrentTransform(userId);
     if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[inventory-current] ${e}`));
@@ -228,12 +241,12 @@ async function main() {
   // ── 7. FBM 在庫取得 ──────────────────────────────────
   if (skipFbm || !process.env.AMAZON_SELLER_ID) {
     if (!process.env.AMAZON_SELLER_ID) {
-      skip('7/8 FBM 在庫取得（AMAZON_SELLER_ID 未設定のためスキップ）');
+      skip('8/9 FBM 在庫取得（AMAZON_SELLER_ID 未設定のためスキップ）');
     } else {
-      skip('7/8 FBM 在庫取得');
+      skip('8/9 FBM 在庫取得');
     }
   } else {
-    step('7/8 FBM 在庫取得（Listings Items API）');
+    step('8/9 FBM 在庫取得（Listings Items API）');
     try {
       const r = await runFbmInventorySync(userId);
       if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[fbm-sync] ${e}`));
@@ -245,8 +258,8 @@ async function main() {
     }
   }
 
-  // ── 8. mart テーブル構築 ─────────────────────────────
-  step('8/8 売上集計 mart 構築');
+  // ── 9. mart テーブル構築 ─────────────────────────────
+  step('9/9 売上集計 mart 構築');
   try {
     const r = await runBuildSalesMart(userId);
     if (r.errors.length > 0) allErrors.push(...r.errors.map(e => `[build-mart] ${e}`));

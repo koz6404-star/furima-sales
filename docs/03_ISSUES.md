@@ -12,7 +12,7 @@
 | Orders / Finances / FBA 取得のアプリ外実行化 | - | 完了 | Phase4 で実装済み |
 | 取得→整形の連鎖スクリプト | - | 完了 | Phase5 で `amazon-full-sync` 実装済み |
 | mart テーブル（amazon_sales_summary_*）の導入 | - | 完了 | Phase7 で実装・検証済み。日次32日・月次4ヶ月・SKU/ASIN各7件 |
-| 取得・整形の cron / queue 基盤 | 中 | 未着手 | 本実装は将来フェーズ。着手条件: バッチ基盤方針確定後 |
+| 取得・整形の cron / queue 基盤 | - | 完了 | Vercel Cron で `/api/cron/amazon-sync` を毎日自動実行 |
 
 ---
 
@@ -42,8 +42,8 @@
 | Amazon UI 非表示 | - | 完了 | Phase8 で非表示化 → Phase16 で `/amazon-dashboard` に置換 |
 | 同期・整形ボタンの段階的削除 | 低 | 将来 | バッチ化後に「最終更新日時」表示へ移行 |
 | Amazon 新 UI 作成 | - | 完了 | Phase16 で `/amazon-dashboard` 作成済み |
-| amazon-full-sync 定期実行 | 中 | 未着手 | Vercel Cron Jobs または GitHub Actions。TODO #7 |
-| Amazon＋フリマ合算表示 | 高 | 未着手 | 全チャネル合計の利益を一画面で。TODO #2 |
+| amazon-full-sync 定期実行 | - | 完了 | Vercel Cron（毎日 JST 3:00）。環境変数 CRON_SECRET / AMAZON_CRON_USER_ID の設定が必要 |
+| Amazon＋フリマ合算表示 | - | 完了 | `/dashboard` で全チャネル統合表示。Amazon mart + フリマ sales を合算 |
 
 ---
 

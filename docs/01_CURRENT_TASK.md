@@ -7,33 +7,46 @@
 ## 現在の作業指示
 
 ### タイトル
-Phase16: Amazon 取り込み完成（新 UI・nav 復活）
+3タスク一括実行: Settlement Postage 組込み・Vercel Cron・統合ダッシュボード
 
 ### 更新日
-2026-03-16
+2026-03-17
 
 ### 状態
 実装済み（デプロイ検証待ち）
 
 ### 目的
-FBA + FBM 統合の新しい Amazon 売上管理画面を作成し、ナビゲーションに復活させる。
+1. Settlement Postage（配送ラベル代）を full-sync パイプラインに組み込み
+2. amazon-full-sync を Vercel Cron で毎日自動実行
+3. ダッシュボードに Amazon データを合算表示（全チャネル統合）
 
 ### 実行結果
-- `src/app/amazon-dashboard/page.tsx` 作成（サーバーコンポーネント、認証チェック）
-- `src/components/amazon-dashboard-client.tsx` 作成（SKU別売上・統合在庫・月別集計の3タブ UI）
-- `src/components/nav.tsx` に「Amazon売上」メニュー追加
-- 型エラー修正（finances.ts, transform-fee-events.ts, amazon-sales-lines/route.ts, verify ページ）
-- `tsconfig.json` に legacy 除外追加
-- ビルド成功確認
+**Task 1: Settlement Postage 組込み**
+- `scripts/amazon-full-sync.ts` にステップ 5/9 として配送ラベル代取得を追加
+- `src/app/api/cron/amazon-sync/route.ts` にも Settlement Postage ステップ追加済み
+- `src/lib/amazon/run-settlement-postage-sync.ts` を利用
+
+**Task 2: Vercel Cron 定期実行**
+- `src/app/api/cron/amazon-sync/route.ts` 作成（全9ステップ、maxDuration=300、CRON_SECRET 認証）
+- `vercel.json` に cron schedule 追加（毎日 UTC 18:00 = JST 3:00）
+- 環境変数: `CRON_SECRET`（認証用）、`AMAZON_CRON_USER_ID`（対象ユーザー）を Vercel に設定が必要
+
+**Task 3: 統合ダッシュボード**
+- `/dashboard` を全チャネル統合に拡張（フリマ + Amazon mart データを合算）
+- サマリーカードにフリマ/Amazon 内訳を表示
+- プラットフォーム別テーブルに「Amazon(自動)」行と合計行を追加
+- 売れ筋ランキングに Amazon SKU も含め、販路バッジ付き
+- グラフ（日別/月別推移）に Amazon 売上も合算
 
 ### 検証手順
-1. Vercel に自動デプロイされるのを待つ
-2. `/amazon-dashboard` にアクセスし、3タブ（SKU別売上・統合在庫・月別集計）が表示されることを確認
-3. nav に「Amazon売上」メニューが表示されることを確認
+1. Vercel にデプロイ後、`/dashboard` でフリマ + Amazon のデータが合算表示されることを確認
+2. プラットフォーム別テーブルに Amazon(自動) 行が表示されることを確認
+3. Vercel 環境変数に `CRON_SECRET` と `AMAZON_CRON_USER_ID` を設定
+4. Vercel Cron Jobs 画面で `/api/cron/amazon-sync` が登録されていることを確認
 
 ### 次アクション
-- Amazon 商品原価入力 UI（SKU ごとに仕入れ原価を手動登録）
-- Amazon＋フリマ合算表示
+- Vercel 環境変数の設定（CRON_SECRET, AMAZON_CRON_USER_ID）
+- デプロイ後の動作確認
 
 ---
 
