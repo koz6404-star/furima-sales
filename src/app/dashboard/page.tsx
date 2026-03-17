@@ -42,7 +42,7 @@ export default async function DashboardPage({
   // ── フリマ売上データ ──
   const { data: sales } = await supabase
     .from('sales')
-    .select('*, products(name, sku)')
+    .select('*, products(name, sku, cost_yen)')
     .eq('user_id', user.id)
     .gte('sold_at', startDate)
     .lte('sold_at', endDate);
@@ -52,23 +52,27 @@ export default async function DashboardPage({
   let frimaShipping = 0;
   let frimaMaterial = 0;
   let frimaProfit = 0;
-  const byPlatform: Record<string, { revenue: number; fee: number; shipping: number; profit: number }> = {};
+  let frimaCost = 0;
+  const byPlatform: Record<string, { revenue: number; cost: number; fee: number; shipping: number; profit: number }> = {};
   const chartByKey: Record<string, { revenue: number; profit: number }> = {};
   const byProduct: Record<string, { name: string; sku: string | null; quantity: number; revenue: number; profit: number; source: string }> = {};
 
   for (const s of sales || []) {
     const rev = s.unit_price_yen * s.quantity;
+    const productCost = ((s.products as { name: string; sku: string | null; cost_yen: number | null } | null)?.cost_yen ?? 0) * s.quantity;
     frimaRevenue += rev;
     frimaFee += s.fee_yen;
     frimaShipping += s.shipping_yen;
     frimaMaterial += (s.material_yen || 0);
     frimaProfit += s.gross_profit_yen;
+    frimaCost += productCost;
     const platform =
       s.platform === 'mercari' ? 'メルカリ' : s.platform === 'amazon' ? 'Amazon(手動)' : 'ラクマ';
     if (!byPlatform[platform]) {
-      byPlatform[platform] = { revenue: 0, fee: 0, shipping: 0, profit: 0 };
+      byPlatform[platform] = { revenue: 0, cost: 0, fee: 0, shipping: 0, profit: 0 };
     }
     byPlatform[platform].revenue += rev;
+    byPlatform[platform].cost += productCost;
     byPlatform[platform].fee += s.fee_yen;
     byPlatform[platform].shipping += s.shipping_yen;
     byPlatform[platform].profit += s.gross_profit_yen;
@@ -83,8 +87,8 @@ export default async function DashboardPage({
     const pid = s.product_id;
     if (!byProduct[pid]) {
       byProduct[pid] = {
-        name: (s.products as { name: string; sku: string | null } | null)?.name ?? '不明',
-        sku: (s.products as { name: string; sku: string | null } | null)?.sku ?? null,
+        name: (s.products as { name: string; sku: string | null; cost_yen: number | null } | null)?.name ?? '不明',
+        sku: (s.products as { name: string; sku: string | null; cost_yen: number | null } | null)?.sku ?? null,
         quantity: 0,
         revenue: 0,
         profit: 0,
@@ -169,6 +173,13 @@ export default async function DashboardPage({
     }
   }
 
+  // ── Amazon SKU 別原価 ──
+  const { data: amazonCostRows } = await supabase
+    .from('amazon_sku_cost')
+    .select('sku, cost_yen')
+    .eq('user_id', user.id);
+  const amazonCostMap = new Map((amazonCostRows ?? []).map((c) => [c.sku, c.cost_yen ?? 0]));
+
   // ── Amazon 売れ筋ランキング（選択期間でフィルタ） ──
   const { data: amSalesLines } = await supabase
     .from('amazon_sales_lines')
@@ -177,9 +188,13 @@ export default async function DashboardPage({
     .gte('order_date', startDate)
     .lte('order_date', endDate);
 
+  let amazonCostTotal = 0;
   for (const sl of amSalesLines ?? []) {
     const sku = sl.sku ?? 'unknown';
     const pid = `amazon_${sku}`;
+    const unitCost = amazonCostMap.get(sku) ?? 0;
+    const lineCost = unitCost * sl.quantity;
+    amazonCostTotal += lineCost;
     if (!byProduct[pid]) {
       byProduct[pid] = {
         name: sl.product_name ?? sku,
@@ -194,30 +209,38 @@ export default async function DashboardPage({
     byProduct[pid].revenue += (sl.sales_amount_yen ?? 0);
   }
 
-  // Amazon SKU の利益を按分（売上比率で手数料を配分）
+  // Amazon SKU の利益を按分（売上比率で手数料+原価を配分）
   const amazonSkuKeys = Object.keys(byProduct).filter((k) => k.startsWith('amazon_'));
   if (amazonRevenue > 0) {
     for (const key of amazonSkuKeys) {
       const p = byProduct[key];
+      const sku = key.replace('amazon_', '');
+      const unitCost = amazonCostMap.get(sku) ?? 0;
+      const skuCost = unitCost * p.quantity;
       const ratio = p.revenue / amazonRevenue;
-      p.profit = Math.round(p.revenue + (amazonFee * ratio)); // fee is negative
+      p.profit = Math.round(p.revenue + (amazonFee * ratio) - skuCost); // fee is negative
     }
   }
 
-  // Amazon をプラットフォーム別に追加（手数料/送料を分離）
+  // Amazon の利益 = 売上 - 手数料 - 原価
+  const amazonProfit = amazonAfterFee - amazonCostTotal;
+
+  // Amazon をプラットフォーム別に追加（手数料/送料/原価を分離）
   if (amazonRevenue > 0 || amazonFee !== 0) {
     byPlatform['Amazon'] = {
       revenue: amazonRevenue,
+      cost: amazonCostTotal,
       fee: Math.abs(amazonCommission),
       shipping: Math.abs(amazonShipping),
-      profit: amazonAfterFee,
+      profit: amazonProfit,
     };
   }
 
   // ── 全チャネル合算 ──
   const totalRevenue = frimaRevenue + amazonRevenue;
+  const totalCost = frimaCost + amazonCostTotal;
   const totalExpense = frimaFee + frimaShipping + frimaMaterial + Math.abs(amazonCommission) + Math.abs(amazonShipping);
-  const totalProfit = frimaProfit + amazonAfterFee;
+  const totalProfit = frimaProfit + amazonProfit;
 
   const productRanking = Object.values(byProduct)
     .sort((a, b) => b.profit - a.profit)
@@ -267,15 +290,15 @@ export default async function DashboardPage({
             )}
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-6">
-            <h3 className="text-sm font-medium text-slate-500">経費合計<span className="text-xs font-normal ml-1">（手数料＋送料＋資材）</span></h3>
-            <p className="text-2xl font-bold mt-2 text-rose-600">¥{totalExpense.toLocaleString()}</p>
+            <h3 className="text-sm font-medium text-slate-500">経費合計<span className="text-xs font-normal ml-1">（原価＋手数料＋送料＋資材）</span></h3>
+            <p className="text-2xl font-bold mt-2 text-rose-600">¥{(totalCost + totalExpense).toLocaleString()}</p>
           </div>
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <h3 className="text-sm font-medium text-slate-500">利益合計</h3>
             <p className="text-2xl font-bold mt-2 text-emerald-600">¥{totalProfit.toLocaleString()}</p>
-            {amazonAfterFee > 0 && frimaProfit > 0 && (
+            {amazonProfit !== 0 && frimaProfit !== 0 && (
               <p className="text-xs text-slate-400 mt-1">
-                フリマ ¥{frimaProfit.toLocaleString()} / Amazon ¥{amazonAfterFee.toLocaleString()}
+                フリマ ¥{frimaProfit.toLocaleString()} / Amazon ¥{amazonProfit.toLocaleString()}
               </p>
             )}
           </div>
@@ -307,11 +330,12 @@ export default async function DashboardPage({
           <div className="rounded-lg border border-slate-200 bg-white p-6">
             <h2 className="font-bold text-lg mb-4">プラットフォーム別集計</h2>
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-200">
                     <th className="py-2 text-left">プラットフォーム</th>
                     <th className="py-2 text-right">売上</th>
+                    <th className="py-2 text-right">原価</th>
                     <th className="py-2 text-right">手数料</th>
                     <th className="py-2 text-right">送料</th>
                     <th className="py-2 text-right">利益</th>
@@ -322,6 +346,7 @@ export default async function DashboardPage({
                     <tr key={platform} className="border-b border-slate-100">
                       <td className="py-2 font-medium">{platform}</td>
                       <td className="py-2 text-right">¥{data.revenue.toLocaleString()}</td>
+                      <td className="py-2 text-right">{data.cost > 0 ? `¥${data.cost.toLocaleString()}` : '-'}</td>
                       <td className="py-2 text-right">¥{data.fee.toLocaleString()}</td>
                       <td className="py-2 text-right">¥{data.shipping.toLocaleString()}</td>
                       <td className="py-2 text-right text-emerald-600">¥{data.profit.toLocaleString()}</td>
@@ -331,6 +356,7 @@ export default async function DashboardPage({
                     <tr className="border-t-2 border-slate-300 font-bold">
                       <td className="py-2">合計</td>
                       <td className="py-2 text-right">¥{totalRevenue.toLocaleString()}</td>
+                      <td className="py-2 text-right">{totalCost > 0 ? `¥${totalCost.toLocaleString()}` : '-'}</td>
                       <td className="py-2 text-right">¥{(frimaFee + Math.abs(amazonCommission)).toLocaleString()}</td>
                       <td className="py-2 text-right">¥{(frimaShipping + Math.abs(amazonShipping)).toLocaleString()}</td>
                       <td className="py-2 text-right text-emerald-600">¥{totalProfit.toLocaleString()}</td>
@@ -338,7 +364,7 @@ export default async function DashboardPage({
                   )}
                   {Object.keys(byPlatform).length === 0 && (
                     <tr>
-                      <td colSpan={5} className="py-4 text-center text-slate-500">
+                      <td colSpan={6} className="py-4 text-center text-slate-500">
                         {periodLabel}に販売データがありません
                       </td>
                     </tr>
