@@ -6,6 +6,18 @@
 
 ## 2026年3月
 
+### 商品別パフォーマンス分析画面（2026-03-22）
+- `/performance` 新規作成: SKU・商品ごとの売上・利益・利益率・ROI・在庫を一覧表示
+- フリマ（sales+products）と Amazon（mart+cost+inventory）を統合
+- 月別/全期間切替、Amazon/フリマ絞り込み、商品名・SKU検索、5種ソート対応
+- スマホ対応のカード型レイアウト
+- ナビに「商品分析」リンク追加
+
+### Amazon原価保存バグ修正（2026-03-22）
+- `amazon_sku_cost` テーブルに `shipping_yen` カラムが未適用だったのが原因で保存が500エラーになっていた
+- マイグレーション `032` の `ALTER TABLE` を Supabase に手動適用して解決
+- RLSポリシーも操作別に分離（`033_fix_amazon_sku_cost_rls.sql`）
+
 ### CSVエクスポート Amazon統合（2026-03-17）
 - `export-analysis` API: Amazon SKU データをフリマ商品と同一CSVに統合出力
   - 「チャネル」列を先頭に追加（フリマ / Amazon(FBA) / Amazon(FBM)）

@@ -14,6 +14,7 @@ const navItems = [
   { href: '/import', label: 'Excel取込' },
   { href: `/dashboard?period=month&year=${new Date().getFullYear()}&month=${new Date().getMonth() + 1}`, label: 'ダッシュボード' },
   { href: '/amazon-dashboard', label: 'Amazon売上' },
+  { href: '/performance', label: '商品分析' },
   { href: '/export', label: '出力エクスポート' },
   { href: '/settings', label: '設定' },
 ];
