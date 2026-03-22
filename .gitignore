@@ -50,3 +50,9 @@ test-results/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# logs
+*.log
+
+# claude code
+.claude/
