@@ -80,12 +80,12 @@ export async function GET(req: NextRequest) {
     .select('sku, product_name, units_sold, sales_amount_yen, fee_amount_yen, sales_after_fee_yen, current_inventory, fulfillment_type')
     .eq('user_id', user.id);
 
-  // ── Amazon SKU 別原価 ──
+  // ── Amazon SKU 別原価（送料含む） ──
   const { data: amazonCosts } = await supabase
     .from('amazon_sku_cost')
-    .select('sku, cost_yen')
+    .select('sku, cost_yen, shipping_yen')
     .eq('user_id', user.id);
-  const amazonCostMap = new Map((amazonCosts ?? []).map((c) => [c.sku, c.cost_yen ?? 0]));
+  const amazonCostMap = new Map((amazonCosts ?? []).map((c) => [c.sku, (c.cost_yen ?? 0) + (c.shipping_yen ?? 0)]));
 
   // ── Amazon 直近販売数 ──
   const { data: amazonSalesLines } = await supabase

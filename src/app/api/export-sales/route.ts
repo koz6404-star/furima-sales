@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
   const productIds = [...new Set((sales ?? []).map((s) => s.product_id))];
   const { data: products } = await supabase
     .from('products')
-    .select('id, name, sku')
+    .select('id, name, sku, cost_yen')
     .in('id', productIds.length > 0 ? productIds : ['__none__']);
   const productMap = new Map((products ?? []).map((p) => [p.id, p]));
 
@@ -65,6 +65,13 @@ export async function GET(req: NextRequest) {
     .gte('posted_date', startDate)
     .lte('posted_date', endDate);
 
+  // Amazon SKU 別原価（送料含む）
+  const { data: amazonCosts } = await supabase
+    .from('amazon_sku_cost')
+    .select('sku, cost_yen, shipping_yen')
+    .eq('user_id', user.id);
+  const amazonCostMap = new Map((amazonCosts ?? []).map((c) => [c.sku, (c.cost_yen ?? 0) + (c.shipping_yen ?? 0)]));
+
   // 期間内の Amazon 総手数料・総売上
   let totalAmazonFee = 0;
   let totalAmazonRevenue = 0;
@@ -76,7 +83,7 @@ export async function GET(req: NextRequest) {
   }
 
   const rows: string[][] = [
-    ['販売日', '商品名', 'SKU', '個数', '単価', '売上', '手数料', '送料', '資材代', '粗利', 'プラットフォーム'],
+    ['販売日', '商品名', 'SKU', '個数', '単価', '売上', '原価', '手数料', '送料', '資材代', '粗利', '利益率%', 'ROI%', 'プラットフォーム'],
   ];
 
   // ── フリマ行 ──
@@ -85,6 +92,9 @@ export async function GET(req: NextRequest) {
     const name = product?.name ?? '(不明)';
     const sku = product?.sku ?? '';
     const revenue = s.unit_price_yen * s.quantity;
+    const costYen = (product?.cost_yen ?? 0) * s.quantity;
+    const profitRate = revenue > 0 ? Math.round((s.gross_profit_yen / revenue) * 100) : 0;
+    const roi = costYen > 0 ? Math.round((s.gross_profit_yen / costYen) * 100) : 0;
     const platform = s.platform === 'mercari' ? 'メルカリ' : 'ラクマ';
     rows.push([
       s.sold_at,
@@ -93,10 +103,13 @@ export async function GET(req: NextRequest) {
       String(s.quantity),
       String(s.unit_price_yen),
       String(revenue),
+      String(costYen),
       String(s.fee_yen),
       String(s.shipping_yen),
       String(s.material_yen ?? 0),
       String(s.gross_profit_yen),
+      String(profitRate),
+      String(roi),
       platform,
     ]);
   }
@@ -108,7 +121,11 @@ export async function GET(req: NextRequest) {
     // 売上比率で手数料を按分
     const ratio = totalAmazonRevenue > 0 ? amount / totalAmazonRevenue : 0;
     const fee = Math.round(Math.abs(totalAmazonFee) * ratio);
-    const profit = amount - fee;
+    const unitCost = amazonCostMap.get(l.sku ?? '') ?? 0;
+    const costTotal = unitCost * l.quantity;
+    const profit = amount - fee - costTotal;
+    const profitRate = amount > 0 ? Math.round((profit / amount) * 100) : 0;
+    const roi = costTotal > 0 ? Math.round((profit / costTotal) * 100) : 0;
 
     rows.push([
       l.order_date ?? '',
@@ -117,10 +134,13 @@ export async function GET(req: NextRequest) {
       String(l.quantity),
       String(unitPrice),
       String(amount),
+      String(costTotal),
       String(fee),
       '0',
       '0',
       String(profit),
+      String(profitRate),
+      String(roi),
       'Amazon',
     ]);
   }
