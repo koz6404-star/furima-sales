@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Nav } from '@/components/nav';
 import { ExportDownloadClient } from './export-download-client';
+import { SetStrategyDownloadClient } from './set-strategy-download-client';
 
 export default async function ExportPage() {
   const supabase = await createClient();
@@ -37,6 +38,20 @@ export default async function ExportPage() {
             <div>在庫ステータス（好調/滞留等）</div>
           </div>
           <ExportDownloadClient />
+        </div>
+
+        <div className="rounded-lg border border-amber-200 bg-white p-6 mt-6">
+          <h2 className="font-semibold mb-2">セット化戦略データ</h2>
+          <p className="text-slate-600 text-sm mb-3">
+            フリマ商品（メルカリ・ラクマ）のみを対象に、セット販売の組み合わせをAIに提案してもらうためのデータです。
+          </p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-slate-500 mb-4">
+            <div>利益率が低い商品を自動で候補表示</div>
+            <div>企画・サイズ・色の情報付き</div>
+            <div>既存セット構成も出力（重複防止）</div>
+            <div>AIへの依頼事項を自動記載</div>
+          </div>
+          <SetStrategyDownloadClient />
         </div>
 
         <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
