@@ -1,6 +1,6 @@
 # プロジェクト状態（正本）
 
-**更新日**: 2026-03-17（統合ダッシュボード・Vercel Cron・Settlement Postage 組込み）
+**更新日**: 2026-03-22（商品別パフォーマンス分析・Amazon原価バグ修正・エクスポートMD対応）
 **参照**: `01_CURRENT_TASK.md`（作業指示）, `02_CHANGELOG.md`（変更履歴）, `03_ISSUES.md`（未解決論点）
 
 ---
@@ -37,6 +37,9 @@
 | **Phase17** | Settlement Postage を full-sync に組込み | 実装済み |
 | **Phase18** | Vercel Cron で amazon-full-sync 毎日自動実行（JST 3:00） | 実装済み（環境変数設定待ち） |
 | **Phase19** | ダッシュボード全チャネル統合（フリマ + Amazon 合算表示） | 実装済み |
+| **Phase20** | 商品別パフォーマンス分析画面（`/performance`） | 実装済み |
+| **Phase20+** | Amazon原価保存バグ修正（shipping_yenカラム未適用 + RLS修正） | 実装済み |
+| **Phase20++** | エクスポートMarkdown形式対応 + 原価・利益率・ROI列追加 | 実装済み |
 
 ### フリマ側（基盤改善）
 
@@ -64,8 +67,8 @@
 ## 3. 次にやること（優先順）
 
 1. **Vercel 環境変数設定** — CRON_SECRET, AMAZON_CRON_USER_ID を Vercel に追加
-2. **デプロイ後の動作確認** — 統合ダッシュボード・Cron 実行の検証
-3. **原価未入力 SKU の利益計算** — Amazon SKU の原価入力率向上
+2. **原価（仕入れ値）の商品マスタ反映と粗利計算強化**（TODO#5）
+3. **AI による売れ筋分析・仕入れ提案**（TODO#8 — 最終ゴール）
 
 ---
 
