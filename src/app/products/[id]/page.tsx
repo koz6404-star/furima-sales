@@ -11,6 +11,7 @@ import { ProductDeleteButton } from '@/components/product-delete-button';
 import { SaleRowActions } from '@/components/sale-row-actions';
 import { DefaultShippingSelector } from './default-shipping-selector';
 import { StockAgeBadge } from '@/components/stock-age-badge';
+import { StockAdjustForm } from './stock-adjust-form';
 import { DuplicateDetailSection } from '@/components/duplicate-detail-section';
 
 export default async function ProductDetailPage({
@@ -197,6 +198,17 @@ export default async function ProductDetailPage({
                     <p className="text-slate-600 text-xs mt-0.5">家: {stockAtHome} / 倉庫: {stockAtWarehouse} / FBA: {stockAtFba || '—'}</p>
                   )}
                 </div>
+                {(product as { platform?: string | null }).platform !== 'amazon' && (
+                  <div className="col-span-2">
+                    <StockAdjustForm
+                      productId={product.id}
+                      stockAtHome={stockAtHome}
+                      stockAtWarehouse={stockAtWarehouse}
+                      stockAtFba={stockAtFba}
+                      totalStock={product.stock}
+                    />
+                  </div>
+                )}
                 {product.stock_received_at && (
                   <div>
                     <span className="text-slate-500">入荷日</span>
