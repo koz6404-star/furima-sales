@@ -29,14 +29,21 @@ export function SetCreateModal({
 }) {
   const isSingleProduct = selectedProducts.length === 1;
 
-  // 各商品のセット内数量（商品ID → 個数）
-  const [qtyMap, setQtyMap] = useState<Record<string, number>>(() => {
-    const map: Record<string, number> = {};
+  // 各商品のセット内数量（商品ID → 入力文字列）
+  const [qtyInputMap, setQtyInputMap] = useState<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
     for (const p of selectedProducts) {
-      map[p.id] = isSingleProduct ? 2 : 1;
+      map[p.id] = isSingleProduct ? '2' : '1';
     }
     return map;
   });
+
+  // 数値に変換（空文字や不正値は1として扱う）
+  const qtyMap: Record<string, number> = {};
+  for (const p of selectedProducts) {
+    const v = parseInt(qtyInputMap[p.id] ?? '1', 10);
+    qtyMap[p.id] = isNaN(v) || v < 1 ? 1 : Math.min(v, 99);
+  }
 
   const buildName = (map: Record<string, number>) => {
     return selectedProducts
@@ -52,11 +59,16 @@ export function SetCreateModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const updateQty = (productId: string, qty: number) => {
-    const clamped = Math.max(1, Math.min(99, qty));
-    const newMap = { ...qtyMap, [productId]: clamped };
-    setQtyMap(newMap);
-    setName(buildName(newMap));
+  const updateQty = (productId: string, rawValue: string) => {
+    const newInputMap = { ...qtyInputMap, [productId]: rawValue };
+    setQtyInputMap(newInputMap);
+    // セット名は数値化した値で更新
+    const newQtyMap: Record<string, number> = {};
+    for (const p of selectedProducts) {
+      const v = parseInt(newInputMap[p.id] ?? '1', 10);
+      newQtyMap[p.id] = isNaN(v) || v < 1 ? 1 : Math.min(v, 99);
+    }
+    setName(buildName(newQtyMap));
   };
 
   const totalCost = selectedProducts.reduce((s, p) => s + p.cost_yen * (qtyMap[p.id] ?? 1), 0);
@@ -204,8 +216,8 @@ export function SetCreateModal({
                       type="number"
                       min={1}
                       max={99}
-                      value={qtyMap[p.id] ?? 1}
-                      onChange={(e) => updateQty(p.id, parseInt(e.target.value, 10) || 1)}
+                      value={qtyInputMap[p.id] ?? '1'}
+                      onChange={(e) => updateQty(p.id, e.target.value)}
                       className="w-14 rounded border border-slate-300 px-2 py-1 text-sm text-center"
                     />
                   </div>
