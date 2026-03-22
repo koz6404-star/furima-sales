@@ -28,20 +28,42 @@ export function SetCreateModal({
   onSuccess: () => void;
 }) {
   const isSingleProduct = selectedProducts.length === 1;
-  const [name, setName] = useState(
-    isSingleProduct
-      ? formatProductLabel(selectedProducts[0]) + ' ×2 セット'
-      : selectedProducts.map(formatProductLabel).join(' + ') + ' セット'
-  );
-  const [quantityPerSet, setQuantityPerSet] = useState(isSingleProduct ? 2 : 1);
+
+  // 各商品のセット内数量（商品ID → 個数）
+  const [qtyMap, setQtyMap] = useState<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const p of selectedProducts) {
+      map[p.id] = isSingleProduct ? 2 : 1;
+    }
+    return map;
+  });
+
+  const buildName = (map: Record<string, number>) => {
+    return selectedProducts
+      .map((p) => {
+        const qty = map[p.id] ?? 1;
+        return qty > 1 ? `${formatProductLabel(p)} ×${qty}` : formatProductLabel(p);
+      })
+      .join(' + ') + ' セット';
+  };
+
+  const [name, setName] = useState(buildName(qtyMap));
   const [initialStock, setInitialStock] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const totalCost = selectedProducts.reduce((s, p) => s + p.cost_yen * (isSingleProduct ? quantityPerSet : 1), 0);
-  const minStock = isSingleProduct
-    ? Math.floor(selectedProducts[0].stock / quantityPerSet)
-    : Math.min(...selectedProducts.map((p) => p.stock));
+  const updateQty = (productId: string, qty: number) => {
+    const clamped = Math.max(1, Math.min(99, qty));
+    const newMap = { ...qtyMap, [productId]: clamped };
+    setQtyMap(newMap);
+    setName(buildName(newMap));
+  };
+
+  const totalCost = selectedProducts.reduce((s, p) => s + p.cost_yen * (qtyMap[p.id] ?? 1), 0);
+
+  // 各商品で作れるセット数 = 在庫 ÷ そのセット内数量
+  const maxSetsPerProduct = selectedProducts.map((p) => Math.floor(p.stock / (qtyMap[p.id] ?? 1)));
+  const minStock = Math.min(...maxSetsPerProduct);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,9 +73,7 @@ export function SetCreateModal({
       return;
     }
     if (minStock < 1) {
-      setError(isSingleProduct
-        ? `在庫が不足しています。${quantityPerSet}個必要です。`
-        : '各商品の在庫不足です。');
+      setError('構成商品の在庫が不足しています。');
       return;
     }
     if (initialStock > minStock) {
@@ -70,7 +90,7 @@ export function SetCreateModal({
       return;
     }
 
-    // 構成商品の実際の利用可能在庫を取得（product_location_stock 優先で整合性を保つ）
+    // 構成商品の実際の利用可能在庫を取得
     const availablePerProduct: Record<string, number> = {};
     for (const p of selectedProducts) {
       const { data: locRows } = await supabase.from('product_location_stock').select('location, quantity').eq('product_id', p.id);
@@ -79,9 +99,9 @@ export function SetCreateModal({
       const locTotal = (locRows?.length ?? 0) > 0 ? homeQ + whQ : p.stock;
       availablePerProduct[p.id] = locTotal;
     }
-    const actualMinStock = isSingleProduct
-      ? Math.floor((availablePerProduct[selectedProducts[0].id] ?? 0) / quantityPerSet)
-      : Math.min(...selectedProducts.map((p) => availablePerProduct[p.id] ?? 0));
+    const actualMinStock = Math.min(
+      ...selectedProducts.map((p) => Math.floor((availablePerProduct[p.id] ?? 0) / (qtyMap[p.id] ?? 1)))
+    );
     if (initialStock > actualMinStock) {
       setError(`在庫が不足しています。最大${actualMinStock}セットまで作成できます。`);
       setLoading(false);
@@ -111,7 +131,7 @@ export function SetCreateModal({
     const setItems = selectedProducts.map((p) => ({
       set_product_id: newProduct.id,
       component_product_id: p.id,
-      quantity_per_set: isSingleProduct ? quantityPerSet : 1,
+      quantity_per_set: qtyMap[p.id] ?? 1,
     }));
     const { error: itemsErr } = await supabase.from('product_set_items').insert(setItems);
     if (itemsErr) {
@@ -123,7 +143,7 @@ export function SetCreateModal({
 
     const { deductLocationStock } = await import('@/lib/location-stock');
     for (const p of selectedProducts) {
-      const qtyPerSet = isSingleProduct ? quantityPerSet : 1;
+      const qtyPerSet = qtyMap[p.id] ?? 1;
       const deduct = initialStock * qtyPerSet;
       const { data: locRows } = await supabase.from('product_location_stock').select('location, quantity').eq('product_id', p.id);
       const homeQ = locRows?.find((r: { location: string }) => r.location === 'home')?.quantity ?? 0;
@@ -162,34 +182,38 @@ export function SetCreateModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+      <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-bold mb-4">セット出品</h2>
         <p className="text-sm text-slate-600 mb-4">
-          {isSingleProduct
-            ? `「${formatProductLabel(selectedProducts[0])}」を${quantityPerSet}個セットとして登録します。`
-            : `選択した${selectedProducts.length}商品を1セットとして商品一覧に追加します。セット在庫が1増えるごとに、各構成商品の在庫が1ずつ減ります。`}
+          選択した{selectedProducts.length}商品でセットを作成します。各商品のセット内個数を指定できます。
         </p>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isSingleProduct && (
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">セット内数量 *</label>
-              <input
-                type="number"
-                value={quantityPerSet}
-                onChange={(e) => {
-                  const v = Math.max(2, Math.min(99, parseInt(e.target.value, 10) || 2));
-                  setQuantityPerSet(v);
-                  setName(formatProductLabel(selectedProducts[0]) + ` ×${v} セット`);
-                }}
-                min={2}
-                max={99}
-                className="w-full rounded border border-slate-300 px-3 py-2"
-              />
-              <p className="text-xs text-slate-500 mt-1">
-                1セットあたりの個数（2〜99）。在庫{selectedProducts[0].stock}個で{minStock >= 1 ? `最大${minStock}セット作成できます` : '在庫が足りません'}。
-              </p>
+          {/* 各商品のセット内数量 */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-2">構成商品と個数</label>
+            <div className="space-y-2">
+              {selectedProducts.map((p) => (
+                <div key={p.id} className="flex items-center gap-2 rounded border border-slate-200 p-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" title={formatProductLabel(p)}>{formatProductLabel(p)}</p>
+                    <p className="text-xs text-slate-400">在庫 {p.stock}個 / 原価 ¥{p.cost_yen.toLocaleString()}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="text-xs text-slate-500">×</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={99}
+                      value={qtyMap[p.id] ?? 1}
+                      onChange={(e) => updateQty(p.id, parseInt(e.target.value, 10) || 1)}
+                      className="w-14 rounded border border-slate-300 px-2 py-1 text-sm text-center"
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">セット名 *</label>
             <input
@@ -211,16 +235,15 @@ export function SetCreateModal({
               className="w-full rounded border border-slate-300 px-3 py-2"
             />
             <p className="text-xs text-slate-500 mt-1">
-              {isSingleProduct
-                ? `最大${minStock}セット（在庫÷セット内数量）`
-                : `最大${minStock}セット（構成商品の最小在庫に合わせます）`}
+              最大{minStock}セット（構成商品の在庫÷セット内個数の最小値）
             </p>
           </div>
           <div className="rounded bg-slate-50 p-3 text-sm">
             <p className="text-slate-600">
-              構成: {isSingleProduct
-                ? `${formatProductLabel(selectedProducts[0])} ×${quantityPerSet}`
-                : selectedProducts.map(formatProductLabel).join(' + ')}
+              構成: {selectedProducts.map((p) => {
+                const qty = qtyMap[p.id] ?? 1;
+                return qty > 1 ? `${formatProductLabel(p)} ×${qty}` : formatProductLabel(p);
+              }).join(' + ')}
             </p>
             <p className="font-medium mt-1">セット原価: ¥{totalCost.toLocaleString()}</p>
           </div>
