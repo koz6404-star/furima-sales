@@ -218,7 +218,79 @@ export async function GET(req: NextRequest) {
   // 利益額降順でソート
   allRows.sort((a, b) => b.profit - a.profit);
 
-  // CSV行に変換
+  // サマリー統計
+  const frimaRows = allRows.filter((r) => r.channel === 'フリマ');
+  const amazonRows = allRows.filter((r) => r.channel.startsWith('Amazon'));
+  const totalRevenue = allRows.reduce((s, r) => s + r.revenue, 0);
+  const totalProfit = allRows.reduce((s, r) => s + r.profit, 0);
+  const totalStockValue = allRows.reduce((s, r) => s + r.stockValue, 0);
+  const deadStockCount = allRows.filter((r) => r.status === '滞留在庫').length;
+
+  const { searchParams: sp } = new URL(req.url);
+  const format = sp.get('format');
+
+  // ── Markdown 形式 ──
+  if (format === 'md') {
+    const yen = (v: number) => `¥${v.toLocaleString()}`;
+    const lines: string[] = [];
+
+    lines.push('# 戦略分析レポート');
+    lines.push('');
+    lines.push(`出力日: ${today}`);
+    lines.push('');
+    lines.push('## サマリー');
+    lines.push('');
+    lines.push(`| 指標 | 値 |`);
+    lines.push(`|------|------|`);
+    lines.push(`| フリマ商品数 | ${frimaRows.length}件 |`);
+    lines.push(`| Amazon商品数 | ${amazonRows.length}件 |`);
+    lines.push(`| 累計売上合計 | ${yen(totalRevenue)} |`);
+    lines.push(`| 累計利益合計 | ${yen(totalProfit)} |`);
+    lines.push(`| 全体利益率 | ${totalRevenue > 0 ? Math.round((totalProfit / totalRevenue) * 100) : 0}% |`);
+    lines.push(`| 在庫金額合計 | ${yen(totalStockValue)} |`);
+    lines.push(`| 滞留在庫 | ${deadStockCount}件 |`);
+    lines.push('');
+    lines.push('## 商品別データ（利益順）');
+    lines.push('');
+    lines.push('| # | チャネル | 商品名 | SKU | 原価 | 平均売価 | 販売数 | 売上 | 手数料 | 利益 | 利益率 | ROI | 30日販売 | トレンド | 在庫 | 残日数 | ステータス |');
+    lines.push('|---|----------|--------|-----|------|----------|--------|------|--------|------|--------|-----|----------|----------|------|--------|------------|');
+
+    allRows.forEach((r, i) => {
+      const daysStr = r.daysRemaining >= 9999 ? '-' : String(r.daysRemaining);
+      lines.push(`| ${i + 1} | ${r.channel} | ${r.name} | ${r.sku} | ${yen(r.costYen)} | ${yen(r.avgPrice)} | ${r.qtySold} | ${yen(r.revenue)} | ${yen(r.fee)} | ${yen(r.profit)} | ${r.profitRate}% | ${r.roi}% | ${r.qty30d} | ${r.trend} | ${r.stock} | ${daysStr} | ${r.status} |`);
+    });
+
+    lines.push('');
+    lines.push('## 用語説明');
+    lines.push('');
+    lines.push('- **利益率**: 利益÷売上×100');
+    lines.push('- **ROI**: 利益÷原価投資額×100（資金効率）');
+    lines.push('- **30日販売**: 直近30日の販売数（≒月間ペース）');
+    lines.push('- **トレンド**: 直近30日と90日平均の比較（加速↑/安定→/減速↓/新規★/停止■）');
+    lines.push('- **残日数**: 現在の販売ペースで在庫が何日持つか');
+    lines.push('- **ステータス**: 好調/安定/要注意/滞留在庫/在庫切れ/新商品');
+    lines.push('');
+    lines.push('## 分析のヒント');
+    lines.push('');
+    lines.push('- ROI%が高い商品 → 仕入れ拡大候補');
+    lines.push('- 残在庫日数が少ない好調商品 → 早急に追加仕入れ');
+    lines.push('- 滞留在庫 → 値下げ or 販路変更を検討');
+    lines.push('- トレンド「加速↑」→ 旬の商品、在庫確保を優先');
+    lines.push('- トレンド「減速↓」→ 追加仕入れは慎重に');
+    lines.push('');
+
+    const mdBody = lines.join('\n');
+    const filename = `strategy_analysis_${today.replace(/-/g, '')}.md`;
+
+    return new NextResponse(mdBody, {
+      headers: {
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+      },
+    });
+  }
+
+  // ── CSV 形式（デフォルト） ──
   const rows: string[][] = [headerRow];
   for (const r of allRows) {
     rows.push([
@@ -255,14 +327,6 @@ export async function GET(req: NextRequest) {
       },
     });
   }
-
-  // サマリー統計
-  const frimaRows = allRows.filter((r) => r.channel === 'フリマ');
-  const amazonRows = allRows.filter((r) => r.channel.startsWith('Amazon'));
-  const totalRevenue = allRows.reduce((s, r) => s + r.revenue, 0);
-  const totalProfit = allRows.reduce((s, r) => s + r.profit, 0);
-  const totalStockValue = allRows.reduce((s, r) => s + r.stockValue, 0);
-  const deadStockCount = allRows.filter((r) => r.status === '滞留在庫').length;
 
   const commentLines = [
     '# 【戦略分析用データ】フリマ + Amazon 統合',

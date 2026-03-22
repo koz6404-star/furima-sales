@@ -42,12 +42,12 @@ export default async function ExportPage() {
         <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
           <p className="font-medium text-slate-700 mb-2">【使い方】</p>
           <ol className="list-decimal list-inside space-y-1">
-            <li>「戦略分析データをダウンロード」をクリック</li>
-            <li>ダウンロードしたCSVファイルを開く</li>
-            <li>中身をすべてコピー</li>
+            <li>CSV形式 または Markdown形式 でダウンロード</li>
+            <li>ダウンロードしたファイルを開いて中身をコピー</li>
             <li>ChatGPT等のAIの入力欄に貼り付ける</li>
             <li>「仕入れ判断のアドバイスをください」「在庫を最適化したい」などと依頼する</li>
           </ol>
+          <p className="mt-2 text-xs text-slate-400">Markdown形式はAIに読ませるのに最適です。CSV形式はExcelで開けます。</p>
         </div>
       </main>
     </div>
