@@ -3,7 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { PerformanceItem } from '@/app/api/performance/route';
 
-type SortKey = 'grossProfit' | 'salesAmount' | 'unitsSold' | 'profitRate' | 'roi' | 'currentStock';
+type SortKey = 'grossProfit' | 'salesAmount' | 'unitsSold' | 'profitRate';
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'grossProfit', label: '利益順' },
+  { key: 'salesAmount', label: '売上順' },
+  { key: 'unitsSold', label: '個数順' },
+  { key: 'profitRate', label: '利益率順' },
+];
 
 export function PerformanceClient() {
   const [items, setItems] = useState<PerformanceItem[]>([]);
@@ -16,6 +23,15 @@ export function PerformanceClient() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [periodType, setPeriodType] = useState<'month' | 'all'>('month');
+
+  const goMonth = (dir: -1 | 1) => {
+    let m = month + dir;
+    let y = year;
+    if (m < 1) { m = 12; y--; }
+    if (m > 12) { m = 1; y++; }
+    setMonth(m);
+    setYear(y);
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -47,51 +63,83 @@ export function PerformanceClient() {
       return (item.name?.toLowerCase().includes(q)) || (item.sku?.toLowerCase().includes(q));
     })
     .sort((a, b) => {
-      const av = a[sortKey] ?? -Infinity;
-      const bv = b[sortKey] ?? -Infinity;
-      return (bv as number) - (av as number);
+      const av = (a[sortKey] ?? -Infinity) as number;
+      const bv = (b[sortKey] ?? -Infinity) as number;
+      return bv - av;
     });
+
+  // サマリー計算
+  const totalSales = filtered.reduce((s, i) => s + i.salesAmount, 0);
+  const totalProfit = filtered.reduce((s, i) => s + i.grossProfit, 0);
+  const totalUnits = filtered.reduce((s, i) => s + i.unitsSold, 0);
+  const totalProfitRate = totalSales > 0 ? Math.round((totalProfit / totalSales) * 100) : 0;
 
   const yen = (v: number) => `¥${v.toLocaleString()}`;
 
   return (
     <div>
-      {/* フィルタ */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      {/* 期間切り替え */}
+      <div className="flex items-center gap-2 mb-4">
         <button
           onClick={() => setPeriodType('month')}
-          className={`px-3 py-1.5 text-sm rounded ${periodType === 'month' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+          className={`px-3 py-1.5 text-sm rounded-lg font-medium transition ${periodType === 'month' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
         >
           月別
         </button>
         <button
           onClick={() => setPeriodType('all')}
-          className={`px-3 py-1.5 text-sm rounded ${periodType === 'all' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}
+          className={`px-3 py-1.5 text-sm rounded-lg font-medium transition ${periodType === 'all' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
         >
           全期間
         </button>
-        {periodType === 'month' && (
-          <div className="flex gap-1 items-center">
-            <select value={year} onChange={(e) => setYear(Number(e.target.value))} className="border rounded px-2 py-1.5 text-sm">
-              {[now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1].map((y) => (
-                <option key={y} value={y}>{y}年</option>
-              ))}
-            </select>
-            <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="border rounded px-2 py-1.5 text-sm">
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m}>{m}月</option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      {/* 月ナビゲーション */}
+      {periodType === 'month' && (
+        <div className="flex items-center justify-center gap-4 mb-4">
+          <button onClick={() => goMonth(-1)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 text-lg">
+            ◀
+          </button>
+          <span className="text-lg font-bold min-w-[120px] text-center">
+            {year}年{month}月
+          </span>
+          <button onClick={() => goMonth(1)} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500 text-lg">
+            ▶
+          </button>
+        </div>
+      )}
+
+      {/* サマリーカード */}
+      {!loading && (
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="rounded-xl bg-white border border-slate-200 p-4 text-center">
+            <p className="text-xs text-slate-400 mb-1">売上合計</p>
+            <p className="text-lg font-bold">{yen(totalSales)}</p>
+          </div>
+          <div className={`rounded-xl border p-4 text-center ${totalProfit >= 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+            <p className="text-xs text-slate-400 mb-1">粗利合計</p>
+            <p className={`text-lg font-bold ${totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
+              {yen(totalProfit)}
+            </p>
+          </div>
+          <div className="rounded-xl bg-white border border-slate-200 p-4 text-center">
+            <p className="text-xs text-slate-400 mb-1">販売個数</p>
+            <p className="text-lg font-bold">{totalUnits}<span className="text-sm font-normal text-slate-400">個</span></p>
+          </div>
+          <div className="rounded-xl bg-white border border-slate-200 p-4 text-center">
+            <p className="text-xs text-slate-400 mb-1">利益率</p>
+            <p className="text-lg font-bold">{totalProfitRate}<span className="text-sm font-normal text-slate-400">%</span></p>
+          </div>
+        </div>
+      )}
+
+      {/* フィルタ＆検索 */}
+      <div className="flex flex-wrap gap-2 mb-3">
         {(['all', 'Amazon', 'フリマ'] as const).map((f) => (
           <button
             key={f}
             onClick={() => setSourceFilter(f)}
-            className={`px-3 py-1.5 text-sm rounded ${sourceFilter === f ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600'}`}
+            className={`px-3 py-1.5 text-sm rounded-lg transition ${sourceFilter === f ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
           >
             {f === 'all' ? '全て' : f}
           </button>
@@ -101,84 +149,63 @@ export function PerformanceClient() {
           placeholder="商品名・SKUで検索"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="border rounded px-3 py-1.5 text-sm flex-1 min-w-[140px]"
+          className="border rounded-lg px-3 py-1.5 text-sm flex-1 min-w-[140px]"
         />
       </div>
 
       {/* ソート */}
-      <div className="flex gap-1 overflow-x-auto mb-4 pb-1">
-        {([
-          ['grossProfit', '利益順'],
-          ['salesAmount', '売上順'],
-          ['unitsSold', '個数順'],
-          ['profitRate', '利益率順'],
-          ['roi', 'ROI順'],
-        ] as [SortKey, string][]).map(([key, label]) => (
+      <div className="flex gap-1 mb-4">
+        {SORT_OPTIONS.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setSortKey(key)}
-            className={`px-2.5 py-1 text-xs rounded whitespace-nowrap ${sortKey === key ? 'bg-emerald-100 text-emerald-700 font-medium' : 'bg-slate-50 text-slate-500'}`}
+            className={`px-2.5 py-1 text-xs rounded-lg transition ${sortKey === key ? 'bg-emerald-100 text-emerald-700 font-medium' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
           >
             {label}
           </button>
         ))}
       </div>
 
-      {/* 結果 */}
+      {/* 商品リスト */}
       {loading ? (
-        <p className="text-slate-400 text-sm py-8 text-center">読み込み中...</p>
+        <p className="text-slate-400 text-sm py-12 text-center">読み込み中...</p>
       ) : filtered.length === 0 ? (
-        <p className="text-slate-400 text-sm py-8 text-center">該当する商品がありません</p>
+        <p className="text-slate-400 text-sm py-12 text-center">該当する商品がありません</p>
       ) : (
         <>
           <p className="text-xs text-slate-400 mb-2">{filtered.length}件</p>
-          <div className="space-y-3">
-            {filtered.map((item) => (
-              <div key={item.key} className="rounded-lg border border-slate-200 bg-white p-4">
-                {/* ヘッダ行: 商品名 + バッジ */}
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm leading-tight truncate" title={item.name}>{item.name}</p>
-                    {item.sku && <p className="text-xs text-slate-400 truncate">{item.sku}</p>}
+          <div className="space-y-2">
+            {filtered.map((item, idx) => (
+              <div key={item.key} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                {/* 商品名 + バッジ */}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-slate-300 font-medium w-5 shrink-0">{idx + 1}</span>
+                    <p className="font-medium text-sm truncate" title={item.name}>{item.name}</p>
                   </div>
-                  <div className="flex gap-1 shrink-0">
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${
-                      item.source === 'Amazon' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
-                    }`}>
-                      {item.source}
-                    </span>
-                    {item.fulfillment && (
-                      <span className="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
-                        {item.fulfillment}
-                      </span>
-                    )}
-                  </div>
+                  <span className={`text-xs px-1.5 py-0.5 rounded shrink-0 ${
+                    item.source === 'Amazon' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
+                  }`}>
+                    {item.source}
+                  </span>
                 </div>
 
-                {/* 指標グリッド */}
-                <div className="grid grid-cols-3 gap-x-3 gap-y-1 text-sm">
-                  <div>
+                {/* 数値 */}
+                <div className="flex items-center gap-4 text-sm">
+                  <div className="flex-1">
                     <span className="text-xs text-slate-400">売上</span>
                     <p className="font-medium">{yen(item.salesAmount)}</p>
                   </div>
-                  <div>
-                    <span className="text-xs text-slate-400">原価</span>
-                    <p className="font-medium">{item.costAmount > 0 ? yen(item.costAmount) : <span className="text-slate-300">-</span>}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-400">手数料等</span>
-                    <p className="font-medium">{yen(item.feeAmount)}</p>
-                  </div>
-                  <div>
-                    <span className="text-xs text-slate-400">利益</span>
+                  <div className="flex-1">
+                    <span className="text-xs text-slate-400">粗利</span>
                     <p className={`font-bold ${item.grossProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                       {yen(item.grossProfit)}
                     </p>
                   </div>
-                  <div>
+                  <div className="text-center">
                     <span className="text-xs text-slate-400">利益率</span>
-                    <p className="font-medium">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-xs ${
+                    <p>
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-xs font-medium ${
                         item.profitRate >= 30 ? 'bg-emerald-100 text-emerald-700' :
                         item.profitRate >= 10 ? 'bg-yellow-100 text-yellow-700' :
                         'bg-rose-100 text-rose-600'
@@ -187,16 +214,10 @@ export function PerformanceClient() {
                       </span>
                     </p>
                   </div>
-                  <div>
+                  <div className="text-center">
                     <span className="text-xs text-slate-400">個数</span>
-                    <p className="font-medium">{item.unitsSold}個</p>
+                    <p className="font-medium text-sm">{item.unitsSold}</p>
                   </div>
-                </div>
-
-                {/* 下段: ROI + 在庫 */}
-                <div className="flex gap-4 mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
-                  <span>ROI: {item.roi != null ? `${item.roi}%` : '-'}</span>
-                  <span>在庫: {item.currentStock}個</span>
                 </div>
               </div>
             ))}
