@@ -228,13 +228,14 @@ export function ProductsTableWithActions({
           }}
         />
       )}
-      {/* スマホ・タブレット: カードレイアウト */}
-      <div className="md:hidden divide-y divide-slate-200">
-        {(!products || products.length === 0) && (
+      {/* スマホ・タブレット: カードレイアウト（lg未満で表示） */}
+      <div className="lg:hidden">
+        {(!products || products.length === 0) ? (
           <div className="px-4 py-8 text-center text-slate-500">
             {showStock ? '在庫ありの商品がありません' : '完売商品がありません'}
           </div>
-        )}
+        ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:gap-px md:bg-slate-200">
         {products?.map((p) => {
           const hasDefaultShipping = p.default_shipping_yen != null;
           const defaultShippingYen = p.default_shipping_yen ?? 210;
@@ -246,7 +247,7 @@ export function ProductsTableWithActions({
           return (
             <div
               key={p.id}
-              className={`flex gap-3 p-4 items-start touch-manipulation ${p.platform === 'amazon' ? 'bg-orange-50/80 active:bg-orange-100/80' : 'active:bg-slate-50'}`}
+              className={`flex gap-3 p-4 items-start touch-manipulation ${p.platform === 'amazon' ? 'bg-orange-50/80 active:bg-orange-100/80' : 'bg-white active:bg-slate-50'}`}
             >
               <label className="flex-shrink-0 pt-1 cursor-pointer select-none min-w-[44px] min-h-[44px] flex items-center justify-center">
                 <input
@@ -332,10 +333,12 @@ export function ProductsTableWithActions({
             </div>
           );
         })}
+        </div>
+        )}
       </div>
 
-      {/* デスクトップ: テーブルレイアウト */}
-      <div className="hidden md:block overflow-x-auto">
+      {/* デスクトップ: テーブルレイアウト（lg以上で表示） */}
+      <div className="hidden lg:block overflow-x-auto">
       <table className="w-full min-w-[640px]">
         <thead className="bg-slate-50">
           <tr>
