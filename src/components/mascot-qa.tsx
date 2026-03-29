@@ -15,19 +15,15 @@ export function MascotQA() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 left-6 z-[100] w-[60px] md:w-[100px] pointer-events-auto cursor-pointer hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 rounded-lg bg-transparent border-0 p-0 appearance-none shadow-none"
+        className="fixed bottom-4 left-4 z-[100] w-10 h-10 rounded-full bg-emerald-600 text-white shadow-md hover:bg-emerald-700 transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 flex items-center justify-center"
         aria-label="よくある質問を表示"
         title="よくある質問"
       >
-        <img
-          src="/images/mcgSbmtM.png?v=2"
-          alt="マスコット"
-          width={100}
-          height={100}
-          className="w-full h-auto object-contain drop-shadow-sm select-none"
-          style={{ backgroundColor: '#f8fafc' }}
-          draggable={false}
-        />
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+          <line x1="12" y1="17" x2="12.01" y2="17" />
+        </svg>
       </button>
 
       {open && (
