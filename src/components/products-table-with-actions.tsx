@@ -228,8 +228,8 @@ export function ProductsTableWithActions({
           }}
         />
       )}
-      {/* スマホ・タブレット: カードレイアウト（lg未満で表示） */}
-      <div className="lg:hidden">
+      {/* スマホ・タブレット: カードレイアウト（xl未満で表示） */}
+      <div className="xl:hidden">
         {(!products || products.length === 0) ? (
           <div className="px-4 py-8 text-center text-slate-500">
             {showStock ? '在庫ありの商品がありません' : '完売商品がありません'}
@@ -337,8 +337,8 @@ export function ProductsTableWithActions({
         )}
       </div>
 
-      {/* デスクトップ: テーブルレイアウト（lg以上で表示） */}
-      <div className="hidden lg:block overflow-x-auto">
+      {/* デスクトップ: テーブルレイアウト（xl以上で表示） */}
+      <div className="hidden xl:block overflow-x-auto">
       <table className="w-full min-w-[640px]">
         <thead className="bg-slate-50">
           <tr>
