@@ -40,6 +40,6 @@ export function getOrderForSort(sort: SortOption): OrderConfig {
     case 'target20_asc':
       return { column: 'target_price_20', ascending: true, nullsFirst: true };
     default:
-      return { column: 'updated_at', ascending: false };
+      return { column: 'name', ascending: true };
   }
 }
