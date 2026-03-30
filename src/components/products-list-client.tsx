@@ -9,7 +9,6 @@ import { ProductSearchBar } from '@/components/product-search-bar';
 import { ProductsTableWithActions } from '@/components/products-table-with-actions';
 import type { SortOption } from '@/components/product-search-bar';
 
-const PER_PAGE = 20;
 
 type Product = {
   id: string;
@@ -39,7 +38,6 @@ export function ProductsListClient() {
   const platformFilter = ['mercari', 'rakuma', 'amazon'].includes(searchParams.get('platform') ?? '') ? searchParams.get('platform')! : '';
   const sort = (searchParams.get('sort') as SortOption) ?? '';
   const minProfit = Math.max(0, parseInt(searchParams.get('minProfit') ?? '0', 10) || 0);
-  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1);
 
   const fetchProducts = useCallback(async () => {
     const supabase = createClient();
@@ -90,12 +88,10 @@ export function ProductsListClient() {
         query = match === 'exact' ? query.eq('name', q) : query.ilike('name', `%${q}%`);
       }
 
-      const from = (page - 1) * PER_PAGE;
-      const to = from + PER_PAGE - 1;
       const orderOpts: { ascending: boolean; nullsFirst?: boolean } = { ascending: orderConfig.ascending };
       if (orderConfig.nullsFirst !== undefined) orderOpts.nullsFirst = orderConfig.nullsFirst;
 
-      const { data: prods, count, error: qErr } = await query.order(orderConfig.column, orderOpts).range(from, to);
+      const { data: prods, count, error: qErr } = await query.order(orderConfig.column, orderOpts).range(0, 999);
       if (qErr) throw qErr;
 
       const prodList = (prods ?? []) as Product[];
@@ -122,13 +118,12 @@ export function ProductsListClient() {
     } finally {
       setLoading(false);
     }
-  }, [q, match, setOnly, locationFilter, platformFilter, sort, minProfit, page]);
+  }, [q, match, setOnly, locationFilter, platformFilter, sort, minProfit]);
 
   useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PER_PAGE));
   const queryStr = [
     q ? `q=${encodeURIComponent(q)}` : '',
     q ? `match=${match}` : '',
@@ -140,8 +135,7 @@ export function ProductsListClient() {
   ]
     .filter(Boolean)
     .join('&');
-  const returnParts = [page > 1 ? `page=${page}` : '', queryStr].filter(Boolean);
-  const returnTo = `/products${returnParts.length ? `?${returnParts.join('&')}` : ''}`;
+  const returnTo = `/products${queryStr ? `?${queryStr}` : ''}`;
 
   return (
     <>
@@ -192,29 +186,6 @@ export function ProductsListClient() {
             allowSetCreation={true}
             returnTo={returnTo}
           />
-          {totalPages > 1 && (
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {page > 1 && (
-                <Link
-                  href={`/products?page=${page - 1}${queryStr ? `&${queryStr}` : ''}`}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 min-h-[44px] flex items-center"
-                >
-                  ← 前へ
-                </Link>
-              )}
-              <span className="px-4 py-2 text-sm text-slate-600 flex items-center">
-                {page} / {totalPages}ページ
-              </span>
-              {page < totalPages && (
-                <Link
-                  href={`/products?page=${page + 1}${queryStr ? `&${queryStr}` : ''}`}
-                  className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 min-h-[44px] flex items-center"
-                >
-                  次へ →
-                </Link>
-              )}
-            </div>
-          )}
         </>
       )}
     </>
