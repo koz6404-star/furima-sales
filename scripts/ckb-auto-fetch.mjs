@@ -412,20 +412,43 @@ async function main() {
         { header: '国際配送依頼番号', key: 'shipmentCode', width: 32 },
       ];
 
+      // 商品画像をダウンロードしてExcelに埋め込む準備
+      console.log(`  📸 商品画像ダウンロード中...`);
+      const imageBuffers = {};
+      let imgOk = 0, imgFail = 0;
+      await Promise.all(deliveredProducts.map(async (p, i) => {
+        if (!p.imageUrl) return;
+        try {
+          const res = await fetch(p.imageUrl, { signal: AbortSignal.timeout(10000) });
+          if (res.ok) {
+            imageBuffers[i] = Buffer.from(await res.arrayBuffer());
+            imgOk++;
+          } else { imgFail++; }
+        } catch { imgFail++; }
+      }));
+      console.log(`  画像: ${imgOk}件DL / ${imgFail}件失敗`);
+
       const intlPerItemJpy = Math.round(intlPerItemCny * FX_RATE);
       const customsPerItemJpy = totalQty > 0 ? Math.round(customsJpy / totalQty) : 0;
       if (customsJpy > 0) {
         console.log(`  関税: ¥${customsJpy.toLocaleString()} → 1個あたり ¥${customsPerItemJpy}`);
       }
 
-      for (const p of deliveredProducts) {
+      // 行高さを画像用に設定
+      const IMG_HEIGHT = 60;
+      const IMG_WIDTH = 60;
+      let dataRowNum = 1; // ヘッダー行
+
+      for (let pi = 0; pi < deliveredProducts.length; pi++) {
+        const p = deliveredProducts[pi];
         const domesticAllocCny = domesticPerItemCny * p.actualQty;
         const unitCostWithDomestic = p.unitPrice + domesticPerItemCny;
         const productCostJpy = Math.round(unitCostWithDomestic * FX_RATE);
         const totalPerItemJpy = productCostJpy + intlPerItemJpy + customsPerItemJpy;
 
-        ws.addRow({
-          image: p.imageUrl,
+        dataRowNum++;
+        const row = ws.addRow({
+          image: '',
           name: translateProductName(p.name),
           nameOriginal: p.name,
           sku: p.sku,
@@ -441,6 +464,19 @@ async function main() {
           totalCostPerItemJpy: totalPerItemJpy,
           shipmentCode: code,
         });
+
+        // 画像埋め込み
+        if (imageBuffers[pi]) {
+          try {
+            const ext = p.imageUrl.includes('.png') ? 'png' : 'jpeg';
+            const imageId = wb.addImage({ buffer: imageBuffers[pi], extension: ext });
+            ws.addImage(imageId, {
+              tl: { col: 0, row: dataRowNum - 1 },
+              ext: { width: IMG_WIDTH, height: IMG_HEIGHT },
+            });
+            row.height = IMG_HEIGHT * 0.75; // ポイント換算
+          } catch {}
+        }
       }
 
       // サマリー行
