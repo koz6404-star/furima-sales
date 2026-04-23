@@ -43,10 +43,12 @@ export async function GET(req: Request) {
 
   const now = new Date();
   const createdAfter = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  // Amazon API: createdBefore must be at least 2 minutes before current time
+  const createdBefore = new Date(now.getTime() - 5 * 60 * 1000);
 
   // 1. Orders raw
   try {
-    const r = await runOrdersRawSync(userId, { createdAfter, createdBefore: now });
+    const r = await runOrdersRawSync(userId, { createdAfter, createdBefore });
     log.orders = `${r.ordersSaved}件`;
     if (r.errors.length) errors.push(...r.errors.map(e => `[orders] ${e}`));
   } catch (e) { errors.push(`[orders] ${(e as Error).message}`); }

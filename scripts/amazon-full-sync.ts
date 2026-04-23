@@ -131,7 +131,8 @@ async function main() {
   const startedAt = new Date().toISOString();
   const now = new Date();
   const createdAfter = from ?? new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const createdBefore = to ?? now;
+  // Amazon API: createdBefore must be at least 2 minutes before current time
+  const createdBefore = to ?? new Date(now.getTime() - 5 * 60 * 1000);
 
   console.log(`[full-sync] started at ${startedAt}`);
   console.log(`[full-sync] user_id: ${userId}`);
