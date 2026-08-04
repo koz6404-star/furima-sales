@@ -168,7 +168,77 @@ export interface TransformFeeEventsResult {
   processed: number;
   saved: number;
   skipped: number;
+  /** 同一注文の重複スナップショットとして除外した raw 行数 */
+  deduped: number;
   errors: string[];
+}
+
+/** Supabase の 1 リクエスト上限。raw は 1 万行を超えるため必ず分割取得する */
+const RAW_PAGE_SIZE = 1000;
+
+/**
+ * ShipmentEventList / RefundEventList は「その注文のその計上日時点の全手数料」を
+ * まるごと持つスナップショット。SP-API を叩くたびに同じ注文が再取得されるため、
+ * raw には同一注文が何十件も積まれる（実測: 2026-04 は 1 注文あたり平均 32 スナップショット）。
+ * 全件を挿入すると手数料が実額の数十倍になるので、最新の fetched_at だけ残す。
+ *
+ * ServiceFeeEventList / AdjustmentEventList は注文単位ではなく個別の課金イベントだが、
+ * こちらも SP-API を叩くたびに同じ請求が再取得されるため重複する（実測: 2026-07 は 12.6 倍）。
+ * ただし注文 ID を持たないので、payload の中身そのものをキーにして同一請求をまとめる。
+ * PostageBilling の payload は {PostedDate(秒精度), AdjustmentType, AdjustmentAmount} の
+ * 3 フィールドしか持たず、これが完全一致する 2 行を別の請求として区別する手段は存在しない。
+ */
+const SNAPSHOT_TYPES = new Set(['ShipmentEventList', 'RefundEventList']);
+const PAYLOAD_DEDUPE_TYPES = new Set(['ServiceFeeEventList', 'AdjustmentEventList']);
+
+/** payload をキー順に正規化して文字列化する（キー順の揺れで別物と誤判定しないため） */
+function stablePayloadKey(payload: unknown): string {
+  const seen = new WeakSet<object>();
+  const norm = (v: unknown): unknown => {
+    if (v === null || typeof v !== 'object') return v;
+    if (seen.has(v as object)) return null;
+    seen.add(v as object);
+    if (Array.isArray(v)) return v.map(norm);
+    const o = v as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(o).sort().map((k) => [k, norm(o[k])]));
+  };
+  return JSON.stringify(norm(payload));
+}
+
+type RawFeeRow = {
+  id: string;
+  order_id: string | null;
+  transaction_type: string;
+  payload_json: unknown;
+  posted_date: string | null;
+  fetched_at: string | null;
+};
+
+/** 同一 (transaction_type, order_id, posted_date) は fetched_at が最新の 1 件だけ残す */
+export function dedupeSnapshotRows<T extends RawFeeRow>(rows: T[]): { kept: T[]; deduped: number } {
+  const latest = new Map<string, T>();
+  const passthrough: T[] = [];
+
+  for (const r of rows) {
+    let key: string;
+    if (SNAPSHOT_TYPES.has(r.transaction_type)) {
+      const orderId = r.order_id ?? extractOrderId((r.payload_json ?? {}) as Record<string, unknown>);
+      const postedDate = toYMD(r.posted_date ?? undefined) ?? extractPostedDate((r.payload_json ?? {}) as Record<string, unknown>);
+      key = `${r.transaction_type}|${orderId ?? ''}|${postedDate ?? ''}`;
+    } else if (PAYLOAD_DEDUPE_TYPES.has(r.transaction_type)) {
+      key = `${r.transaction_type}|${stablePayloadKey(r.payload_json)}`;
+    } else {
+      passthrough.push(r);
+      continue;
+    }
+    const prev = latest.get(key);
+    if (!prev || (r.fetched_at ?? '') >= (prev.fetched_at ?? '')) {
+      latest.set(key, r);
+    }
+  }
+
+  const kept = [...passthrough, ...latest.values()];
+  return { kept, deduped: rows.length - kept.length };
 }
 
 /**
@@ -183,8 +253,33 @@ export async function transformRawToFeeEvents(
     processed: 0,
     saved: 0,
     skipped: 0,
+    deduped: 0,
     errors: [],
   };
+
+  // raw の取得を先に済ませる。取得に失敗したときに fee_events を消したままにしないため、
+  // delete は「入れ直す材料が揃ってから」実行する。
+  const rawRows: RawFeeRow[] = [];
+  for (let from = 0; ; from += RAW_PAGE_SIZE) {
+    const { data: page, error: fetchErr } = await supabase
+      .from('amazon_finance_raw')
+      .select('id, order_id, transaction_type, payload_json, posted_date, fetched_at')
+      .eq('user_id', userId)
+      .in('transaction_type', [...FEE_CANDIDATE_TYPES])
+      .order('id', { ascending: true })
+      .range(from, from + RAW_PAGE_SIZE - 1);
+
+    if (fetchErr) {
+      result.errors.push(`Fetch: ${fetchErr.message}`);
+      return result;
+    }
+    const rows = (page ?? []) as RawFeeRow[];
+    rawRows.push(...rows);
+    if (rows.length < RAW_PAGE_SIZE) break;
+  }
+
+  const { kept, deduped } = dedupeSnapshotRows(rawRows);
+  result.deduped = deduped;
 
   const { error: delErr } = await supabase
     .from('amazon_fee_events')
@@ -196,20 +291,9 @@ export async function transformRawToFeeEvents(
     return result;
   }
 
-  const { data: rawRows, error: fetchErr } = await supabase
-    .from('amazon_finance_raw')
-    .select('id, order_id, transaction_type, payload_json, posted_date, fetched_at')
-    .eq('user_id', userId)
-    .in('transaction_type', [...FEE_CANDIDATE_TYPES]);
-
-  if (fetchErr) {
-    result.errors.push(`Fetch: ${fetchErr.message}`);
-    return result;
-  }
-
   const allLines: Array<{ user_id: string; order_id: string; transaction_type: string; fee_type: string; fee_amount_yen: number; posted_date: string | null; raw_source: string; fetched_at: string | null }> = [];
 
-  for (const r of rawRows ?? []) {
+  for (const r of kept) {
     result.processed++;
     const payload = r.payload_json as Record<string, unknown>;
     let orderId = r.order_id ?? extractOrderId((payload ?? {}) as Record<string, unknown>);
