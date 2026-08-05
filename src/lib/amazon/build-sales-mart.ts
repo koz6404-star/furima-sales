@@ -4,6 +4,7 @@
  * amazon_sales_summary_* テーブルに upsert する。
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchAllPagesIn } from '../supabase/fetch-all';
 
 type SalesLine = {
   id: string;
@@ -61,14 +62,21 @@ export async function buildSalesMart(
   const feeMap: Record<string, number> = {};
 
   if (orderIds.length > 0) {
-    const { data: feeRows, error: feeError } = await supabase
-      .from('amazon_fee_events')
-      .select('order_id, fee_amount_yen')
-      .eq('user_id', userId)
-      .in('order_id', orderIds);
+    // 1,000 行の既定上限で静かに切れるため必ずページングする（DEV-053）
+    const { data: feeRows, error: feeError } = await fetchAllPagesIn<{
+      order_id: string | null;
+      fee_amount_yen: number | null;
+    }>(orderIds, (chunk, from, to) =>
+      supabase
+        .from('amazon_fee_events')
+        .select('order_id, fee_amount_yen')
+        .eq('user_id', userId)
+        .in('order_id', chunk)
+        .range(from, to),
+    );
 
     if (feeError) {
-      result.errors.push(`fee_events fetch: ${feeError.message}`);
+      result.errors.push(`fee_events fetch: ${feeError}`);
     } else {
       for (const r of feeRows ?? []) {
         const oid = (r.order_id ?? '').trim();

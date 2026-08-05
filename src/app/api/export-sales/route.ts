@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllPages } from '@/lib/supabase/fetch-all';
 
 function escapeCsv(value: string): string {
   if (value.includes(',') || value.includes('"') || value.includes('\n')) {
@@ -58,12 +59,19 @@ export async function GET(req: NextRequest) {
     .order('order_date', { ascending: true });
 
   // Amazon 手数料を fee_events から取得（order_id ベース、SKU なし → 全体按分）
-  const { data: amazonFees } = await supabase
-    .from('amazon_fee_events')
-    .select('fee_amount_yen, posted_date')
-    .eq('user_id', user.id)
-    .gte('posted_date', startDate)
-    .lte('posted_date', endDate);
+  // 期間が広いと 1,000 行の既定上限で静かに切れるためページングする（DEV-053）
+  const { data: amazonFees } = await fetchAllPages<{
+    fee_amount_yen: number | null;
+    posted_date: string | null;
+  }>((from_, to_) =>
+    supabase
+      .from('amazon_fee_events')
+      .select('fee_amount_yen, posted_date')
+      .eq('user_id', user.id)
+      .gte('posted_date', startDate)
+      .lte('posted_date', endDate)
+      .range(from_, to_),
+  );
 
   // Amazon SKU 別原価（送料含む）
   const { data: amazonCosts } = await supabase

@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { buildSalesMart } from '@/lib/amazon/build-sales-mart';
+import { fetchAllPages, fetchAllPagesIn } from '@/lib/supabase/fetch-all';
 
 export const dynamic = 'force-dynamic';
 
@@ -114,11 +115,18 @@ async function computeOnDemand(
 
   let feeMap: Record<string, number> = {};
   if (orderIds.length > 0) {
-    const { data: feeRows } = await supabase
-      .from('amazon_fee_events')
-      .select('order_id, fee_amount_yen')
-      .eq('user_id', userId)
-      .in('order_id', orderIds);
+    // 1,000 行の既定上限で静かに切れるため必ずページングする（DEV-053）
+    const { data: feeRows } = await fetchAllPagesIn<{
+      order_id: string | null;
+      fee_amount_yen: number | null;
+    }>(orderIds, (chunk, from, to) =>
+      supabase
+        .from('amazon_fee_events')
+        .select('order_id, fee_amount_yen')
+        .eq('user_id', userId)
+        .in('order_id', chunk)
+        .range(from, to),
+    );
     for (const r of feeRows ?? []) {
       const oid = (r.order_id ?? '').trim();
       if (oid) feeMap[oid] = (feeMap[oid] ?? 0) + (Number(r.fee_amount_yen) || 0);
@@ -270,11 +278,15 @@ export async function GET(req: Request) {
     }
 
     // 配送ラベル代合計を取得（Settlement Report 由来 or 旧 __POSTAGE__）
-    const { data: postageRows } = await supabase
-      .from('amazon_fee_events')
-      .select('fee_amount_yen')
-      .eq('user_id', user.id)
-      .or('fee_type.eq.ShippingLabelPurchase,order_id.eq.__POSTAGE__');
+    const { data: postageRows } = await fetchAllPages<{ fee_amount_yen: number | null }>(
+      (from_, to_) =>
+        supabase
+          .from('amazon_fee_events')
+          .select('fee_amount_yen')
+          .eq('user_id', user.id)
+          .or('fee_type.eq.ShippingLabelPurchase,order_id.eq.__POSTAGE__')
+          .range(from_, to_),
+    );
     const postage_total_yen = (postageRows ?? []).reduce((s, r) => s + (Number(r.fee_amount_yen) || 0), 0);
 
     return NextResponse.json({

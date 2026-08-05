@@ -6,6 +6,7 @@
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllPagesIn } from '@/lib/supabase/fetch-all';
 
 export const dynamic = 'force-dynamic';
 
@@ -80,11 +81,18 @@ export async function GET(req: Request) {
     const orderIds = [...new Set(items.map((r) => r.order_id as string).filter(Boolean))];
     let feeMap: Record<string, number> = {};
     if (orderIds.length > 0) {
-      const { data: feeRows } = await supabase
-        .from('amazon_fee_events')
-        .select('order_id, fee_amount_yen')
-        .eq('user_id', user.id)
-        .in('order_id', orderIds);
+      // 1,000 行の既定上限で静かに切れるため必ずページングする（DEV-053）
+      const { data: feeRows } = await fetchAllPagesIn<{
+        order_id: string | null;
+        fee_amount_yen: number | null;
+      }>(orderIds, (chunk, from, to) =>
+        supabase
+          .from('amazon_fee_events')
+          .select('order_id, fee_amount_yen')
+          .eq('user_id', user.id)
+          .in('order_id', chunk)
+          .range(from, to),
+      );
       for (const r of feeRows ?? []) {
         const oid = String(r.order_id ?? '').trim();
         if (oid) {

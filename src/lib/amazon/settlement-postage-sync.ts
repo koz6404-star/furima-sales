@@ -8,6 +8,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSpApiClient, JAPAN_MARKETPLACE } from '@/lib/amazon-sp-api';
+import { fetchAllPages } from '@/lib/supabase/fetch-all';
 
 // 決済レポートのカラム名
 const COL_TRANSACTION_TYPE = 'transaction-type';
@@ -100,11 +101,14 @@ export async function syncSettlementPostage(
   }
 
   // 3. 既存の __POSTAGE__ 行と PostageBilling 行を削除
-  const { data: oldRows } = await supabase
-    .from('amazon_fee_events')
-    .select('id')
-    .eq('user_id', userId)
-    .or('order_id.eq.__POSTAGE__,fee_type.like.PostageBilling%');
+  const { data: oldRows } = await fetchAllPages<{ id: string }>((pFrom, pTo) =>
+    supabase
+      .from('amazon_fee_events')
+      .select('id')
+      .eq('user_id', userId)
+      .or('order_id.eq.__POSTAGE__,fee_type.like.PostageBilling%')
+      .range(pFrom, pTo),
+  );
 
   if (oldRows && oldRows.length > 0) {
     const { error: delErr } = await supabase

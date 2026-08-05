@@ -5,6 +5,7 @@
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllPages } from '@/lib/supabase/fetch-all';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,13 +48,20 @@ export async function GET(req: Request) {
     const { data: amLines } = await amQuery;
 
     // Amazon: fee_events から期間指定で手数料集計
-    let feeQuery = supabase
-      .from('amazon_fee_events')
-      .select('order_id, fee_amount_yen, posted_date')
-      .eq('user_id', user.id);
-    if (from) feeQuery = feeQuery.gte('posted_date', from);
-    if (to) feeQuery = feeQuery.lte('posted_date', to);
-    const { data: feeEvents } = await feeQuery;
+    // 1,000 行の既定上限で静かに切れるためページングする（DEV-053）
+    const { data: feeEvents } = await fetchAllPages<{
+      order_id: string | null;
+      fee_amount_yen: number | null;
+      posted_date: string | null;
+    }>((pFrom, pTo) => {
+      let feeQuery = supabase
+        .from('amazon_fee_events')
+        .select('order_id, fee_amount_yen, posted_date')
+        .eq('user_id', user.id);
+      if (from) feeQuery = feeQuery.gte('posted_date', from);
+      if (to) feeQuery = feeQuery.lte('posted_date', to);
+      return feeQuery.range(pFrom, pTo);
+    });
 
     // order_id → 手数料合計
     const feeByOrder: Record<string, number> = {};

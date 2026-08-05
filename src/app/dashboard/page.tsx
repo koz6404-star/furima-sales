@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllPages } from '@/lib/supabase/fetch-all';
 import { Nav } from '@/components/nav';
 import { DashboardFilters } from './dashboard-filters';
 import { DashboardCharts } from './dashboard-charts';
@@ -154,12 +155,19 @@ export default async function DashboardPage({
   let amazonCommission = 0; // 販売手数料
   let amazonShipping = 0;   // 配送関連費用
 
-  const { data: feeEvents } = await supabase
-    .from('amazon_fee_events')
-    .select('fee_type, fee_amount_yen')
-    .eq('user_id', user.id)
-    .gte('posted_date', startDate)
-    .lte('posted_date', endDate);
+  // 期間が広いと 1,000 行の既定上限で静かに切れるためページングする（DEV-053）
+  const { data: feeEvents } = await fetchAllPages<{
+    fee_type: string;
+    fee_amount_yen: number;
+  }>((pFrom, pTo) =>
+    supabase
+      .from('amazon_fee_events')
+      .select('fee_type, fee_amount_yen')
+      .eq('user_id', user.id)
+      .gte('posted_date', startDate)
+      .lte('posted_date', endDate)
+      .range(pFrom, pTo),
+  );
 
   for (const fe of feeEvents ?? []) {
     const isShipping = SHIPPING_FEE_TYPES.has(fe.fee_type) ||

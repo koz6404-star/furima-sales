@@ -10,6 +10,7 @@
  */
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { fetchAllPages } from '@/lib/supabase/fetch-all';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,10 +57,14 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const typeCounts = await supabase
-      .from('amazon_finance_raw')
-      .select('transaction_type')
-      .eq('user_id', user.id);
+    // amazon_finance_raw は 1 万行超。1,000 行上限で切れると種別内訳が過少になる（DEV-053）
+    const typeCounts = await fetchAllPages<{ transaction_type: string | null }>((pFrom, pTo) =>
+      supabase
+        .from('amazon_finance_raw')
+        .select('transaction_type')
+        .eq('user_id', user.id)
+        .range(pFrom, pTo),
+    );
 
     const typeMap: Record<string, number> = {};
     for (const r of typeCounts.data ?? []) {
